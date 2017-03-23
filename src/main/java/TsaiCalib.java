@@ -2,9 +2,7 @@ import model.WorldPoint;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
-import org.apache.commons.math3.linear.MatrixUtils;
-import org.apache.commons.math3.linear.RealMatrix;
-import org.apache.commons.math3.linear.RealVector;
+import org.apache.commons.math3.linear.*;
 
 import java.awt.*;
 import java.awt.geom.Point2D;
@@ -65,7 +63,7 @@ public class TsaiCalib {
 
         convertImagePixelsToMilli();
 
-
+        RealVector realEstimatedParamVector = calculateLByPinv();
 
     }
 
@@ -94,21 +92,26 @@ public class TsaiCalib {
 
     private RealVector calculateLByPinv() {
         RealMatrix m = MatrixUtils.createRealMatrix(numPoints, 7);
+        double[] vectorX = new double[numPoints];
 
+        //Build matrix m row by row
         for (WorldPoint wp: calibrationPoints) {
             Point2D.Double pip = wp.getProcessedImagePoint();
+            int i = wp.getId() - 1;
 
-            double[] mRow = {pip.getY()*wp.getX(), pip.getY()*wp.getZ(), pip.getY()*wp.getZ()};
-            m.setRow(wp.getId()-1, mRow);
+            double[] mRow = {pip.getY()*wp.getX(), pip.getY()*wp.getY(), pip.getY()*wp.getZ(), pip.getY(), -pip.getX()*wp.getX(), -pip.getX()*wp.getY(), -pip.getX()*wp.getZ()};
+            m.setRow(i, mRow);
+
+            vectorX[i] = pip.getX();
         }
 
+        RealVector realVectorX = MatrixUtils.createRealVector(vectorX);
 
+        // Dont need to X = M*L -> L = M^-1pseudo*X as Commons DecompositionSolver knows how to solve overdetermined system
+        QRDecomposition QRDecomposition = new QRDecomposition(m);
+        RealVector realVectorL = QRDecomposition.getSolver().solve(realVectorX);
 
-
-        return null;
+        return realVectorL;
     }
 
-    private RealMatrix calculatePseudoInverse() {
-        return null;
-    }
 }
