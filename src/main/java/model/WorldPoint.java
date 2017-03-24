@@ -16,6 +16,7 @@ public class WorldPoint {
     private double z;
     private Point rawImagePoint;
     private Point2D.Double processedImagePoint;
+    private Point2D.Double estimatedProcessedImagePoint;
 
     public WorldPoint(int id, double x, double y, double z, Point rawImagePoint) {
         this.id = id;
@@ -23,6 +24,28 @@ public class WorldPoint {
         this.y = y;
         this.z = z;
         this.rawImagePoint = rawImagePoint;
+    }
+
+    public double getProcessedImagePointNormAsVector() {
+        return Math.pow(processedImagePoint.getX(),2) + Math.pow(processedImagePoint.getY(),2);
+    }
+
+    public RealVector getWorldPointVector() {
+        double[] v = {this.x, this.y, this.z};
+        return MatrixUtils.createRealVector(v);
+    }
+
+    public RealVector getProcessedImagePointVector() {
+        double[] v = { this.processedImagePoint.x, this.processedImagePoint.y };
+        return MatrixUtils.createRealVector(v);
+    }
+
+    public Point2D.Double getEstimatedProcessedImagePoint() {
+        return estimatedProcessedImagePoint;
+    }
+
+    public void setEstimatedProcessedImagePoint(Point2D.Double estimatedProcessedImagePoint) {
+        this.estimatedProcessedImagePoint = estimatedProcessedImagePoint;
     }
 
     public int getId() {
@@ -71,19 +94,5 @@ public class WorldPoint {
 
     public void setProcessedImagePoint(Point2D.Double processedImagePoint) {
         this.processedImagePoint = processedImagePoint;
-    }
-
-    public double getProcessedImagePointNormAsVector() {
-        return Math.pow(processedImagePoint.getX(),2) + Math.pow(processedImagePoint.getY(),2);
-    }
-
-    public RealVector getWorldPointVector() {
-        double[] v = {this.x, this.y, this.z};
-        return MatrixUtils.createRealVector(v);
-    }
-
-    public RealVector getProcessedImagePointVector() {
-        double[] v = { this.processedImagePoint.x, this.processedImagePoint.y };
-        return MatrixUtils.createRealVector(v);
     }
 }

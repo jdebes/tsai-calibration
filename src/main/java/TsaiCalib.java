@@ -1,3 +1,4 @@
+import model.RotationTranslation;
 import model.WorldPoint;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
@@ -30,6 +31,10 @@ public class TsaiCalib {
     private Point2D.Double imageCenter;
     private double pixelWidth;
     private double pixelHeight;
+    private RotationTranslation rotationTranslation = new RotationTranslation();
+    private double focalLength;
+    private double estimatedDistance;
+    private double[][] transMatrix2DInv;
 
     public static void main(String[] args) {
         TsaiCalib tsaiCalib = new TsaiCalib();
@@ -65,6 +70,12 @@ public class TsaiCalib {
             System.out.println("Failed to parse csv");
         }
 
+        transMatrix2DInv = new double[][]{
+                {-pixelWidth, 0, pixelWidth * imageCenter.getX()},
+                {0, -pixelHeight, pixelHeight * imageCenter.getY(),},
+                {0, 0, 1}
+        };
+
         convertImagePixelsToMilli();
 
         RealVector realEstimatedParamVector = calculateLByPinv();
@@ -83,7 +94,7 @@ public class TsaiCalib {
         if ((xti < 0 && maxWorldPoint.getProcessedImagePoint().getX() < 0) && (yti < 0 && maxWorldPoint.getProcessedImagePoint().getY() < 0)) {
             ty = absTy;
         } else if ((xti > 0 && maxWorldPoint.getProcessedImagePoint().getX() > 0) && (yti > 0 && maxWorldPoint.getProcessedImagePoint().getY() > 0)) {
-            absTy = absTy;
+            ty = absTy;
         } else {
             ty = -absTy;
         }
@@ -94,24 +105,36 @@ public class TsaiCalib {
         realEstimatedParamVectorAdjustedSxTy.setEntry(2, realEstimatedParamVectorAdjustedSxTy.getEntry(2) / sX);
         realEstimatedParamVectorAdjustedSxTy.setEntry(3, realEstimatedParamVectorAdjustedSxTy.getEntry(3) / sX);
 
-        double[] r1 = realEstimatedParamVectorAdjustedSxTy.getSubVector(0,3).toArray();
-        double[] r2 = realEstimatedParamVectorAdjustedSxTy.getSubVector(4,3).toArray();
+        rotationTranslation.setR1(realEstimatedParamVectorAdjustedSxTy.getSubVector(0,3).toArray());
+        rotationTranslation.setR2(realEstimatedParamVectorAdjustedSxTy.getSubVector(4,3).toArray());
 
-        final Vector3D r1V = new Vector3D(r1);
-        final Vector3D r2V= new Vector3D(r2);
+        final Vector3D r1V = new Vector3D(rotationTranslation.getR1());
+        final Vector3D r2V= new Vector3D(rotationTranslation.getR2());
         final Vector3D r3V = r1V.crossProduct(r2V);
+
+        rotationTranslation.setR3(r3V.toArray());
+
+
+        rotationTranslation.setTransX(realEstimatedParamVectorAdjustedSxTy.getEntry(3));
+        rotationTranslation.setTransY(ty);
+
+        RealVector focalAndTz = calculateFocalAndTz(MatrixUtils.createRealVector(rotationTranslation.getR2()), MatrixUtils.createRealVector(rotationTranslation.getR3()));
+        this.focalLength = focalAndTz.getEntry(0);
+        rotationTranslation.setTransZ(focalAndTz.getEntry(1));
+
+
+
+        this.estimatedDistance = rotationTranslation.getTranslationVector().getNorm();
+
+        calculate2Dto3DProjectedPoints();
+
 
         return;
 
     }
 
     private void convertImagePixelsToMilli() {
-        double[][] transMatrix = {
-                {-pixelWidth, 0, pixelWidth*imageCenter.getX()},
-                {0, -pixelHeight, pixelHeight*imageCenter.getY(),},
-                {0, 0, 1}
-        };
-        RealMatrix realTransMatrix = MatrixUtils.createRealMatrix(transMatrix);
+        RealMatrix realTransMatrix2DInv = MatrixUtils.createRealMatrix(transMatrix2DInv);
 
         for (WorldPoint worldPoint: calibrationPoints) {
             Point rawPoint = worldPoint.getRawImagePoint();
@@ -119,7 +142,7 @@ public class TsaiCalib {
             RealVector realImageVector = MatrixUtils.createRealVector(imageVector);
 
             Point2D.Double processedImagePoint = new Point2D.Double();
-            RealVector processedImageVector = realTransMatrix.operate(realImageVector);
+            RealVector processedImageVector = realTransMatrix2DInv.operate(realImageVector);
 
             processedImagePoint.x = processedImageVector.getEntry(0);
             processedImagePoint.y = processedImageVector.getEntry(1);
@@ -161,6 +184,50 @@ public class TsaiCalib {
         }
 
         return maxWorldPoint;
+    }
+
+    private RealVector calculateFocalAndTz(RealVector r2, RealVector r3) {
+        RealMatrix m = MatrixUtils.createRealMatrix(numPoints, 2);
+        double[] uZV = new double[numPoints];
+
+        for (WorldPoint worldPoint : calibrationPoints) {
+            RealVector worldVector = worldPoint.getWorldPointVector();
+            int i = worldPoint.getId() - 1;
+
+            double uY = r2.dotProduct(worldVector) + rotationTranslation.getTransY();
+            double uZ = r3.dotProduct(worldVector);
+
+            double[] row = {uY, -worldPoint.getProcessedImagePoint().getY()};
+            uZV[i] = uZ*worldPoint.getProcessedImagePoint().getY();
+
+            m.setRow(i, row);
+        }
+
+        QRDecomposition QRDecomposition = new QRDecomposition(m);
+        RealVector realVectorParams = QRDecomposition.getSolver().solve(MatrixUtils.createRealVector(uZV));
+
+        return  realVectorParams;
+    }
+
+    private void calculate2Dto3DProjectedPoints() {
+        RealMatrix realTransMatrix2DInv = MatrixUtils.createRealMatrix(transMatrix2DInv);
+        RealMatrix realTransMatrix2D = MatrixUtils.inverse(realTransMatrix2DInv);
+        RealMatrix realRotationTranslationMatrix = rotationTranslation.getRotationTranslationMatrix();
+
+
+        final double[][] focalMatrix = {
+            {1,0,0,0},
+            {0,1,0,0},
+            {0,0,1/focalLength,0},
+        };
+        RealMatrix realFocalMatrix = MatrixUtils.createRealMatrix(focalMatrix);
+
+        for (WorldPoint worldPoint : calibrationPoints) {
+            RealVector realWorldVector = worldPoint.getWorldPointVector().append(1.0);
+            RealVector estimated2dVector = realTransMatrix2D.operate(realFocalMatrix.operate(realRotationTranslationMatrix.operate(realWorldVector)));
+            worldPoint.setEstimatedProcessedImagePoint(new Point2D.Double(estimated2dVector.getEntry(0), estimated2dVector.getEntry(1)));
+            //TODO fix projection
+        }
     }
 
 }
