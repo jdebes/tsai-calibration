@@ -1,5 +1,8 @@
 package model;
 
+import org.apache.commons.math3.linear.MatrixUtils;
+import org.apache.commons.math3.linear.RealVector;
+
 import java.awt.*;
 import java.awt.geom.Point2D;
 
@@ -68,5 +71,19 @@ public class WorldPoint {
 
     public void setProcessedImagePoint(Point2D.Double processedImagePoint) {
         this.processedImagePoint = processedImagePoint;
+    }
+
+    public double getProcessedImagePointNormAsVector() {
+        return Math.pow(processedImagePoint.getX(),2) + Math.pow(processedImagePoint.getY(),2);
+    }
+
+    public RealVector getWorldPointVector() {
+        double[] v = {this.x, this.y, this.z};
+        return MatrixUtils.createRealVector(v);
+    }
+
+    public RealVector getProcessedImagePointVector() {
+        double[] v = { this.processedImagePoint.x, this.processedImagePoint.y };
+        return MatrixUtils.createRealVector(v);
     }
 }

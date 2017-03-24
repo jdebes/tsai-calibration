@@ -2,7 +2,11 @@ import model.WorldPoint;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
-import org.apache.commons.math3.linear.*;
+import org.apache.commons.math3.geometry.euclidean.threed.Vector3D;
+import org.apache.commons.math3.linear.MatrixUtils;
+import org.apache.commons.math3.linear.QRDecomposition;
+import org.apache.commons.math3.linear.RealMatrix;
+import org.apache.commons.math3.linear.RealVector;
 
 import java.awt.*;
 import java.awt.geom.Point2D;
@@ -65,6 +69,40 @@ public class TsaiCalib {
 
         RealVector realEstimatedParamVector = calculateLByPinv();
 
+        double absTy = 1 / realEstimatedParamVector.getSubVector(4,3).getNorm();
+        double sX = absTy * realEstimatedParamVector.getSubVector(0,3).getNorm();
+
+        final RealVector realEstimatedParamVectorCancelTy = realEstimatedParamVector.mapMultiply(absTy);
+
+        WorldPoint maxWorldPoint = getPointWithGreatestVectorNorm();
+
+        double xti = realEstimatedParamVectorCancelTy.getSubVector(0,3).dotProduct(maxWorldPoint.getWorldPointVector()) + realEstimatedParamVectorCancelTy.getEntry(3);
+        double yti = realEstimatedParamVectorCancelTy.getSubVector(4,3).dotProduct(maxWorldPoint.getWorldPointVector()) + absTy;
+
+        double ty = 0;
+        if ((xti < 0 && maxWorldPoint.getProcessedImagePoint().getX() < 0) && (yti < 0 && maxWorldPoint.getProcessedImagePoint().getY() < 0)) {
+            ty = absTy;
+        } else if ((xti > 0 && maxWorldPoint.getProcessedImagePoint().getX() > 0) && (yti > 0 && maxWorldPoint.getProcessedImagePoint().getY() > 0)) {
+            absTy = absTy;
+        } else {
+            ty = -absTy;
+        }
+
+        final RealVector realEstimatedParamVectorAdjustedSxTy = realEstimatedParamVector.mapMultiply(ty);
+        realEstimatedParamVectorAdjustedSxTy.setEntry(0, realEstimatedParamVectorAdjustedSxTy.getEntry(0) / sX);
+        realEstimatedParamVectorAdjustedSxTy.setEntry(1, realEstimatedParamVectorAdjustedSxTy.getEntry(1) / sX);
+        realEstimatedParamVectorAdjustedSxTy.setEntry(2, realEstimatedParamVectorAdjustedSxTy.getEntry(2) / sX);
+        realEstimatedParamVectorAdjustedSxTy.setEntry(3, realEstimatedParamVectorAdjustedSxTy.getEntry(3) / sX);
+
+        double[] r1 = realEstimatedParamVectorAdjustedSxTy.getSubVector(0,3).toArray();
+        double[] r2 = realEstimatedParamVectorAdjustedSxTy.getSubVector(4,3).toArray();
+
+        final Vector3D r1V = new Vector3D(r1);
+        final Vector3D r2V= new Vector3D(r2);
+        final Vector3D r3V = r1V.crossProduct(r2V);
+
+        return;
+
     }
 
     private void convertImagePixelsToMilli() {
@@ -112,6 +150,17 @@ public class TsaiCalib {
         RealVector realVectorL = QRDecomposition.getSolver().solve(realVectorX);
 
         return realVectorL;
+    }
+
+    private WorldPoint getPointWithGreatestVectorNorm() {
+        WorldPoint maxWorldPoint = calibrationPoints.get(0);
+        for (WorldPoint worldPoint : calibrationPoints) {
+            if (worldPoint.getProcessedImagePointNormAsVector() > maxWorldPoint.getProcessedImagePointNormAsVector()) {
+                maxWorldPoint = worldPoint;
+            }
+        }
+
+        return maxWorldPoint;
     }
 
 }
