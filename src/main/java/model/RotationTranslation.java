@@ -5,6 +5,7 @@ import org.apache.commons.math3.linear.RealMatrix;
 import org.apache.commons.math3.linear.RealVector;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -62,6 +63,14 @@ public class RotationTranslation {
         rotationVectorsList.add(MatrixUtils.createRealVector(r2));
         rotationVectorsList.add(MatrixUtils.createRealVector(r3));
         return  rotationVectorsList;
+    }
+
+    public void printRotationTranslationMatrix() {
+        List<RealVector> vectors = getRotationVectors();
+        System.out.println("Rotation Translation Matrix");
+        System.out.println(Arrays.toString(vectors.get(0).append(transX).toArray()).replaceAll("[\\]\\[]", ""));
+        System.out.println(Arrays.toString(vectors.get(1).append(transY).toArray()).replaceAll("[\\]\\[]", ""));
+        System.out.println(Arrays.toString(vectors.get(2).append(transZ).toArray()).replaceAll("[\\]\\[]", ""));
     }
 
     public double getTransX() {

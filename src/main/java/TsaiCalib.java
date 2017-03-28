@@ -17,6 +17,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
+
 /**
  * Created by jdeb860 on 3/23/2017.
  */
@@ -36,8 +37,13 @@ public class TsaiCalib {
     private double focalLength;
     private double estimatedDistance;
     private double[][] transMatrix2DInv;
-    private double errorMagSum;
     private double sX;
+
+    // 3D to 2D Error
+    private double errorMagSum;
+    private double averageError;
+    private double errorStdDev;
+
 
     public static void main(String[] args) {
         TsaiCalib tsaiCalib = new TsaiCalib();
@@ -128,20 +134,18 @@ public class TsaiCalib {
         this.focalLength = focalAndTz.getEntry(0);
         rotationTranslation.setTransZ(focalAndTz.getEntry(1));
 
-
-
         this.estimatedDistance = rotationTranslation.getTranslationVector().getNorm();
 
         calculate3Dto2DProjectedPoints();
         double[] errorMagnitudes = calculateErrorSum();
-        double averageError = this.errorMagSum / numPoints;
+        this.averageError = this.errorMagSum / numPoints;
 
         StandardDeviation sd = new StandardDeviation();
-        double errorStdDev = sd.evaluate(errorMagnitudes);
+        this.errorStdDev = sd.evaluate(errorMagnitudes);
 
         calculate2Dto3DProjectedPoints();
 
-
+        printStats();
 
         return;
 
@@ -274,8 +278,6 @@ public class TsaiCalib {
             RealVector estimated3dVector = realRotationTranslationMatrixInv.operate(realFocalMatrixInv.operate(realRawImageVector));
         }
 
-
-
     }
 
     private double[] calculateErrorSum() {
@@ -290,6 +292,25 @@ public class TsaiCalib {
         this.errorMagSum = errorMagSum;
 
         return errorMagnitudes;
+    }
+
+    private void printStats() {
+        rotationTranslation.printRotationTranslationMatrix();
+        printPadding();
+        System.out.println("Estimated Distance, " +  this.estimatedDistance);
+        System.out.println("Estimated Focal Length, " + this.focalLength);
+        System.out.println("sX, " + this.sX);
+        printPadding();
+        System.out.println("3D to 2D errors");
+        System.out.println("Average Error, " + this.averageError );
+        System.out.println("Average StdDev, " + this.errorStdDev );
+        printPadding();
+        System.out.println("2D to 3D errors");
+
+    }
+
+    private void printPadding() {
+        System.out.println("--------");
     }
 
 }
