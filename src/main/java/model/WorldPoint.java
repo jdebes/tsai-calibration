@@ -26,6 +26,16 @@ public class WorldPoint {
         this.rawImagePoint = rawImagePoint;
     }
 
+    public static double calculateErrorMagnitude(Point rawImagePoint, Point estimatedProcessedImagePoint) {
+        double xEr = estimatedProcessedImagePoint.getX() - rawImagePoint.getX();
+        double yEr = estimatedProcessedImagePoint.getY() - rawImagePoint.getY();
+        double[] errorVector = {xEr, yEr};
+
+        RealVector realErrorVector = MatrixUtils.createRealVector(errorVector);
+
+        return realErrorVector.getNorm();
+    }
+
     public double getProcessedImagePointNormAsVector() {
         return Math.pow(processedImagePoint.getX(),2) + Math.pow(processedImagePoint.getY(),2);
     }

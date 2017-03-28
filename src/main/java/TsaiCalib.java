@@ -8,6 +8,7 @@ import org.apache.commons.math3.linear.MatrixUtils;
 import org.apache.commons.math3.linear.QRDecomposition;
 import org.apache.commons.math3.linear.RealMatrix;
 import org.apache.commons.math3.linear.RealVector;
+import org.apache.commons.math3.stat.descriptive.moment.StandardDeviation;
 
 import java.awt.*;
 import java.awt.geom.Point2D;
@@ -21,8 +22,8 @@ import java.util.List;
  */
 public class TsaiCalib {
     private List<WorldPoint> calibrationPoints = new ArrayList<WorldPoint>();
-    private static final String INPUT_FILE_PATH = "C:\\Users\\jdeb860\\Desktop\\tsaiInput.csv";
-    private static final String INPUT_PARAMS_PATH = "C:\\Users\\jdeb860\\Desktop\\params.csv";
+    private static final String INPUT_FILE_PATH = "/home/jonas/Desktop/tsaiInput.csv";
+    private static final String INPUT_PARAMS_PATH = "/home/jonas/Desktop/params.csv";
     private static final String[] FILE_HEADER_MAPPING = {"id","wx","wy","wz","px", "py"};
     private static final String[] PARAMS_HEADER_MAPPING = {"desc", "value"};
 
@@ -35,6 +36,8 @@ public class TsaiCalib {
     private double focalLength;
     private double estimatedDistance;
     private double[][] transMatrix2DInv;
+    private double errorMagSum;
+    private double sX;
 
     public static void main(String[] args) {
         TsaiCalib tsaiCalib = new TsaiCalib();
@@ -118,6 +121,9 @@ public class TsaiCalib {
         rotationTranslation.setTransX(realEstimatedParamVectorAdjustedSxTy.getEntry(3));
         rotationTranslation.setTransY(ty);
 
+        this.sX = sX;
+
+
         RealVector focalAndTz = calculateFocalAndTz(MatrixUtils.createRealVector(rotationTranslation.getR2()), MatrixUtils.createRealVector(rotationTranslation.getR3()));
         this.focalLength = focalAndTz.getEntry(0);
         rotationTranslation.setTransZ(focalAndTz.getEntry(1));
@@ -127,7 +133,11 @@ public class TsaiCalib {
         this.estimatedDistance = rotationTranslation.getTranslationVector().getNorm();
 
         calculate2Dto3DProjectedPoints();
+        double[] errorMagnitudes = calculateErrorSum();
+        double averageError = this.errorMagSum / numPoints;
 
+        StandardDeviation sd = new StandardDeviation();
+        double errorStdDev = sd.evaluate(errorMagnitudes);
 
         return;
 
@@ -220,7 +230,7 @@ public class TsaiCalib {
         0 0 1           0 0 1/f
         */
         final double[][] focalMatrix = {
-            {focalLength,0,0,0},
+            {this.sX * focalLength,0,0,0},
             {0,focalLength,0,0},
             {0,0,1,0},
         };
@@ -231,6 +241,20 @@ public class TsaiCalib {
             RealVector estimated2dHomoVector = realTransMatrix2D.operate(realFocalMatrix.operate(realRotationTranslationMatrix.operate(realWorldVector)));
             worldPoint.setEstimatedProcessedImagePoint(estimated2dHomoVector);
         }
+    }
+
+    private double[] calculateErrorSum() {
+        double[] errorMagnitudes = new double[numPoints];
+        double errorMagSum = 0;
+        for (WorldPoint wp : calibrationPoints) {
+            double errorMag =  WorldPoint.calculateErrorMagnitude(wp.getRawImagePoint(), wp.getEstimatedProcessedImagePoint());
+            errorMagSum += errorMag;
+            errorMagnitudes[wp.getId()-1] = errorMag;
+        }
+
+        this.errorMagSum = errorMagSum;
+
+        return errorMagnitudes;
     }
 
 }
