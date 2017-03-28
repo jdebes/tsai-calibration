@@ -22,8 +22,8 @@ import java.util.List;
  */
 public class TsaiCalib {
     private List<WorldPoint> calibrationPoints = new ArrayList<WorldPoint>();
-    private static final String INPUT_FILE_PATH = "/home/jonas/Desktop/tsaiInput.csv";
-    private static final String INPUT_PARAMS_PATH = "/home/jonas/Desktop/params.csv";
+    private static final String INPUT_FILE_PATH = "C:\\Users\\jdeb860\\Desktop\\tsaiInput.csv";
+    private static final String INPUT_PARAMS_PATH = "C:\\Users\\jdeb860\\Desktop\\params.csv";
     private static final String[] FILE_HEADER_MAPPING = {"id","wx","wy","wz","px", "py"};
     private static final String[] PARAMS_HEADER_MAPPING = {"desc", "value"};
 
@@ -132,12 +132,16 @@ public class TsaiCalib {
 
         this.estimatedDistance = rotationTranslation.getTranslationVector().getNorm();
 
-        calculate2Dto3DProjectedPoints();
+        calculate3Dto2DProjectedPoints();
         double[] errorMagnitudes = calculateErrorSum();
         double averageError = this.errorMagSum / numPoints;
 
         StandardDeviation sd = new StandardDeviation();
         double errorStdDev = sd.evaluate(errorMagnitudes);
+
+        calculate2Dto3DProjectedPoints();
+
+
 
         return;
 
@@ -219,7 +223,7 @@ public class TsaiCalib {
         return  realVectorParams;
     }
 
-    private void calculate2Dto3DProjectedPoints() {
+    private void calculate3Dto2DProjectedPoints() {
         RealMatrix realTransMatrix2DInv = MatrixUtils.createRealMatrix(transMatrix2DInv);
         RealMatrix realTransMatrix2D = MatrixUtils.inverse(realTransMatrix2DInv);
         RealMatrix realRotationTranslationMatrix = rotationTranslation.getRotationTranslationMatrix();
@@ -241,6 +245,30 @@ public class TsaiCalib {
             RealVector estimated2dHomoVector = realTransMatrix2D.operate(realFocalMatrix.operate(realRotationTranslationMatrix.operate(realWorldVector)));
             worldPoint.setEstimatedProcessedImagePoint(estimated2dHomoVector);
         }
+    }
+
+    private void calculate2Dto3DProjectedPoints() {
+        final double[][] focalMatrix = {
+                {1/(this.sX * focalLength),0,0},
+                {0,1/(focalLength),0},
+                {0,0,1},
+                {0,0,0}
+        };
+        RealMatrix realFocalMatrixInv = MatrixUtils.createRealMatrix(focalMatrix);
+
+        RealMatrix realTransMatrix2DInv = MatrixUtils.createRealMatrix(transMatrix2DInv);
+        RealMatrix realRotationTranslationMatrixInv = rotationTranslation.getRotationMatrix().transpose();
+
+
+        for (WorldPoint wp: calibrationPoints) {
+            double[] rawImageVector = {wp.getProcessedImagePoint().getX(), wp.getProcessedImagePoint().getY(), 1.0};
+            RealVector realRawImageVector = MatrixUtils.createRealVector(rawImageVector);
+            RealVector estimated3dVector = realRotationTranslationMatrixInv.operate(realTranslationVector.add(realFocalMatrixInv.operate(realRawImageVector)));
+            int f = 5;
+        }
+
+
+
     }
 
     private double[] calculateErrorSum() {

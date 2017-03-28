@@ -35,8 +35,24 @@ public class RotationTranslation {
         return matrix;
     }
 
+    public RealMatrix getRotationMatrix() {
+        List<RealVector> vectors = getRotationVectors();
+        vectors.set(0, vectors.get(0).append(0));
+        vectors.set(1, vectors.get(1).append(0));
+        vectors.set(2, vectors.get(2).append(0));
+
+        RealMatrix matrix = MatrixUtils.createRealMatrix(4,4);
+
+        for (int i = 0; i < vectors.size(); i++) {
+            matrix.setRow(i,vectors.get(i).toArray());
+        }
+        matrix.setRow(vectors.size(), new double[] {0,0,0,1});
+
+        return matrix;
+    }
+
     public RealVector getTranslationVector(){
-        double[] transVector = {transX, transY, transZ};
+        double[] transVector = {-transX, -transY, -transZ};
         return MatrixUtils.createRealVector(transVector);
     }
 
