@@ -22,8 +22,8 @@ import java.util.List;
  */
 public class TsaiCalib {
     private List<WorldPoint> calibrationPoints = new ArrayList<WorldPoint>();
-    private static final String INPUT_FILE_PATH = "C:\\Users\\jdeb860\\Desktop\\tsaiInput.csv";
-    private static final String INPUT_PARAMS_PATH = "C:\\Users\\jdeb860\\Desktop\\params.csv";
+    private static final String INPUT_FILE_PATH = "/home/jonas/Desktop/tsaiInput.csv";
+    private static final String INPUT_PARAMS_PATH = "/home/jonas/Desktop/params.csv";
     private static final String[] FILE_HEADER_MAPPING = {"id","wx","wy","wz","px", "py"};
     private static final String[] PARAMS_HEADER_MAPPING = {"desc", "value"};
 
@@ -248,23 +248,30 @@ public class TsaiCalib {
     }
 
     private void calculate2Dto3DProjectedPoints() {
-        final double[][] focalMatrix = {
-                {1/(this.sX * focalLength),0,0},
-                {0,1/(focalLength),0},
-                {0,0,1},
-                {0,0,0}
+        final double[][] focalMatrixInv = {
+                {1/(this.sX * focalLength),0,0,0},
+                {0,1/(focalLength),0,0},
+                {0,0,1,0},
+                {0,0,0,1}
         };
-        RealMatrix realFocalMatrixInv = MatrixUtils.createRealMatrix(focalMatrix);
+
+ /*       final double[][] focalMatrix = {
+                {this.sX * focalLength,0,0,0},
+                {0,focalLength,0,0},
+                {0,0,1,0},
+                {0,0,0,1}
+        };*/
+//        RealMatrix realFocalMatrix = MatrixUtils.createRealMatrix(focalMatrix);
+        RealMatrix realFocalMatrixInv = MatrixUtils.createRealMatrix(focalMatrixInv);
 
         RealMatrix realTransMatrix2DInv = MatrixUtils.createRealMatrix(transMatrix2DInv);
-        RealMatrix realRotationTranslationMatrixInv = rotationTranslation.getRotationMatrix().transpose();
+        RealMatrix realRotationTranslationMatrixInv = MatrixUtils.inverse(rotationTranslation.getRotationTranslationMatrix());
 
 
         for (WorldPoint wp: calibrationPoints) {
-            double[] rawImageVector = {wp.getProcessedImagePoint().getX(), wp.getProcessedImagePoint().getY(), 1.0};
+            double[] rawImageVector = {wp.getProcessedImagePoint().getX(), wp.getProcessedImagePoint().getY(), 1.0, 1.0};
             RealVector realRawImageVector = MatrixUtils.createRealVector(rawImageVector);
-            RealVector estimated3dVector = realRotationTranslationMatrixInv.operate(realTranslationVector.add(realFocalMatrixInv.operate(realRawImageVector)));
-            int f = 5;
+            RealVector estimated3dVector = realRotationTranslationMatrixInv.operate(realFocalMatrixInv.operate(realRawImageVector));
         }
 
 
