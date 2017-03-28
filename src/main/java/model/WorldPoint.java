@@ -16,7 +16,7 @@ public class WorldPoint {
     private double z;
     private Point rawImagePoint;
     private Point2D.Double processedImagePoint;
-    private Point2D.Double estimatedProcessedImagePoint;
+    private Point estimatedProcessedImagePoint;
 
     public WorldPoint(int id, double x, double y, double z, Point rawImagePoint) {
         this.id = id;
@@ -40,12 +40,18 @@ public class WorldPoint {
         return MatrixUtils.createRealVector(v);
     }
 
-    public Point2D.Double getEstimatedProcessedImagePoint() {
+    public Point getEstimatedProcessedImagePoint() {
         return estimatedProcessedImagePoint;
     }
 
-    public void setEstimatedProcessedImagePoint(Point2D.Double estimatedProcessedImagePoint) {
+    public void setEstimatedProcessedImagePoint(Point estimatedProcessedImagePoint) {
         this.estimatedProcessedImagePoint = estimatedProcessedImagePoint;
+    }
+
+    public void setEstimatedProcessedImagePoint(RealVector homogeneous3DVector) {
+        double w = homogeneous3DVector.getEntry(2);
+        this.estimatedProcessedImagePoint = new Point((int) Math.round(homogeneous3DVector.getEntry(0) / w), (int) Math.round(homogeneous3DVector.getEntry(1) / w));
+
     }
 
     public int getId() {

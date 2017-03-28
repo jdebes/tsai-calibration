@@ -214,19 +214,22 @@ public class TsaiCalib {
         RealMatrix realTransMatrix2D = MatrixUtils.inverse(realTransMatrix2DInv);
         RealMatrix realRotationTranslationMatrix = rotationTranslation.getRotationTranslationMatrix();
 
-
+        /*        
+        f 0 0   same as 1 0 0  xc = (f * x) / w = x / (w / f)
+        0 f 0           0 1 0
+        0 0 1           0 0 1/f
+        */
         final double[][] focalMatrix = {
-            {1,0,0,0},
-            {0,1,0,0},
-            {0,0,1/focalLength,0},
+            {focalLength,0,0,0},
+            {0,focalLength,0,0},
+            {0,0,1,0},
         };
         RealMatrix realFocalMatrix = MatrixUtils.createRealMatrix(focalMatrix);
 
         for (WorldPoint worldPoint : calibrationPoints) {
             RealVector realWorldVector = worldPoint.getWorldPointVector().append(1.0);
-            RealVector estimated2dVector = realTransMatrix2D.operate(realFocalMatrix.operate(realRotationTranslationMatrix.operate(realWorldVector)));
-            worldPoint.setEstimatedProcessedImagePoint(new Point2D.Double(estimated2dVector.getEntry(0), estimated2dVector.getEntry(1)));
-            //TODO fix projection
+            RealVector estimated2dHomoVector = realTransMatrix2D.operate(realFocalMatrix.operate(realRotationTranslationMatrix.operate(realWorldVector)));
+            worldPoint.setEstimatedProcessedImagePoint(estimated2dHomoVector);
         }
     }
 
