@@ -9,6 +9,8 @@ import org.apache.commons.math3.linear.QRDecomposition;
 import org.apache.commons.math3.linear.RealMatrix;
 import org.apache.commons.math3.linear.RealVector;
 import org.apache.commons.math3.stat.descriptive.moment.StandardDeviation;
+import util.ErrorAnalysisSolver;
+import util.ParametricEquationSolver;
 
 import java.awt.*;
 import java.awt.geom.Point2D;
@@ -23,8 +25,8 @@ import java.util.List;
  */
 public class TsaiCalib {
     private List<WorldPoint> calibrationPoints = new ArrayList<WorldPoint>();
-    private static final String INPUT_FILE_PATH = "/home/jonas/Desktop/tsaiInput.csv";
-    private static final String INPUT_PARAMS_PATH = "/home/jonas/Desktop/params.csv";
+    private static final String INPUT_FILE_PATH = "C:\\Users\\jdeb860\\Desktop\\tsai-data\\ImageEric\\tsaiInput.csv";
+    private static final String INPUT_PARAMS_PATH = "C:\\Users\\jdeb860\\Desktop\\tsai-data\\ImageEric\\params.csv";
     private static final String[] FILE_HEADER_MAPPING = {"id","wx","wy","wz","px", "py"};
     private static final String[] PARAMS_HEADER_MAPPING = {"desc", "value"};
 
@@ -68,12 +70,12 @@ public class TsaiCalib {
             csvFileParser = new CSVParser(fileReader, csvFileFormat);
             csvRecords = csvFileParser.getRecords();
 
-            numPoints = Integer.parseInt(csvRecords.get(0).get("value"));
+            numPoints = calibrationPoints.size();
             imageCenter = new Point2D.Double();
-            imageCenter.x = Double.parseDouble(csvRecords.get(1).get("value"));
-            imageCenter.y = Double.parseDouble(csvRecords.get(2).get("value"));
-            pixelWidth = Double.parseDouble(csvRecords.get(3).get("value"));
-            pixelHeight = Double.parseDouble(csvRecords.get(4).get("value"));
+            imageCenter.x = Double.parseDouble(csvRecords.get(0).get("value"));
+            imageCenter.y = Double.parseDouble(csvRecords.get(1).get("value"));
+            pixelWidth = Double.parseDouble(csvRecords.get(2).get("value"));
+            pixelHeight = Double.parseDouble(csvRecords.get(3).get("value"));
 
         } catch (IOException e) {
             System.out.println("Failed to parse csv");
@@ -253,29 +255,48 @@ public class TsaiCalib {
 
     private void calculate2Dto3DProjectedPoints() {
         final double[][] focalMatrixInv = {
+                {1/(this.sX * focalLength),0,0},
+                {0,1/(focalLength),0},
+                {0,0,1},
+                {0,0,1}
+        };
+
+        final double[][] focalMatrixInvRowPadding = {
                 {1/(this.sX * focalLength),0,0,0},
                 {0,1/(focalLength),0,0},
                 {0,0,1,0},
                 {0,0,0,1}
         };
 
- /*       final double[][] focalMatrix = {
-                {this.sX * focalLength,0,0,0},
-                {0,focalLength,0,0},
-                {0,0,1,0},
-                {0,0,0,1}
-        };*/
-//        RealMatrix realFocalMatrix = MatrixUtils.createRealMatrix(focalMatrix);
         RealMatrix realFocalMatrixInv = MatrixUtils.createRealMatrix(focalMatrixInv);
+        RealMatrix realFocalMatrixInvRowPadding = MatrixUtils.createRealMatrix(focalMatrixInvRowPadding);
 
         RealMatrix realTransMatrix2DInv = MatrixUtils.createRealMatrix(transMatrix2DInv);
         RealMatrix realRotationTranslationMatrixInv = MatrixUtils.inverse(rotationTranslation.getRotationTranslationMatrix());
 
+        double[] cameraOrigin = {0,0,0,1};
+        RealVector realCameraOrigin = MatrixUtils.createRealVector(cameraOrigin);
+        RealVector realCameraOriginWorldFrame = realRotationTranslationMatrixInv.operate(realFocalMatrixInvRowPadding.operate(realCameraOrigin));
 
         for (WorldPoint wp: calibrationPoints) {
-            double[] rawImageVector = {wp.getProcessedImagePoint().getX(), wp.getProcessedImagePoint().getY(), 1.0, 1.0};
+            double[] rawImageVector = {wp.getProcessedImagePoint().getX(), wp.getProcessedImagePoint().getY(), 1.0};
             RealVector realRawImageVector = MatrixUtils.createRealVector(rawImageVector);
-            RealVector estimated3dVector = realRotationTranslationMatrixInv.operate(realFocalMatrixInv.operate(realRawImageVector));
+            RealVector estimatedImagePoint = realRotationTranslationMatrixInv.operate(realFocalMatrixInv.operate(realRawImageVector));
+
+            RealVector parallelVector = realCameraOriginWorldFrame.subtract(estimatedImagePoint);
+
+            RealVector realSolvedTs = ParametricEquationSolver.parametricZeroInterceptTSolve(realCameraOriginWorldFrame, parallelVector);
+
+            List<RealVector> solvedParametricPoints = new ArrayList<RealVector>();
+            for (int i = 0; i < realSolvedTs.getDimension(); i++) {
+                solvedParametricPoints.add(ParametricEquationSolver.solvePointGivenT(realCameraOriginWorldFrame, parallelVector, realSolvedTs.getEntry(i)));
+            }
+
+            List<Double> parametricPointErrorMagnitudes = new ArrayList<Double>();
+            for (RealVector solvedPoint : solvedParametricPoints) {
+                parametricPointErrorMagnitudes.add(ErrorAnalysisSolver.calculateVectorErrorMagnitude(solvedPoint.getSubVector(0,3), wp.getWorldPointVector()));
+            }
+
         }
 
     }
