@@ -17,6 +17,7 @@ public class WorldPoint {
     private Point rawImagePoint;
     private Point2D.Double processedImagePoint;
     private Point estimatedProcessedImagePoint;
+    private Point3D estimatedWorldPoint;
 
     public WorldPoint(int id, double x, double y, double z, Point rawImagePoint) {
         this.id = id;
@@ -110,5 +111,13 @@ public class WorldPoint {
 
     public void setProcessedImagePoint(Point2D.Double processedImagePoint) {
         this.processedImagePoint = processedImagePoint;
+    }
+
+    public Point3D getEstimatedWorldPoint() {
+        return estimatedWorldPoint;
+    }
+
+    public void setEstimatedWorldPoint(Point3D estimatedWorldPoint) {
+        this.estimatedWorldPoint = estimatedWorldPoint;
     }
 }

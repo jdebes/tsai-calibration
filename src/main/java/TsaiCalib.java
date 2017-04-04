@@ -1,3 +1,5 @@
+import model.ErrorStats;
+import model.Point3D;
 import model.RotationTranslation;
 import model.WorldPoint;
 import org.apache.commons.csv.CSVFormat;
@@ -42,9 +44,10 @@ public class TsaiCalib {
     private double sX;
 
     // 3D to 2D Error
-    private double errorMagSum;
-    private double averageError;
-    private double errorStdDev;
+    private ErrorStats errors3to2 = new ErrorStats();
+
+    private ErrorStats errors2to3 = new ErrorStats();
+
 
 
     public static void main(String[] args) {
@@ -139,13 +142,16 @@ public class TsaiCalib {
         this.estimatedDistance = rotationTranslation.getTranslationVector().getNorm();
 
         calculate3Dto2DProjectedPoints();
-        double[] errorMagnitudes = calculateErrorSum();
-        this.averageError = this.errorMagSum / numPoints;
-
+        double[] errorMagnitudes = calculateErrorSum(false);
+        this.errors3to2.setAverageError(this.errors3to2.getErrorMagSum() / numPoints);
         StandardDeviation sd = new StandardDeviation();
-        this.errorStdDev = sd.evaluate(errorMagnitudes);
+        this.errors3to2.setErrorStdDev(sd.evaluate(errorMagnitudes));
 
         calculate2Dto3DProjectedPoints();
+        double[] errorMagnitudes2to3 = calculateErrorSum(true);
+        this.errors2to3.setAverageError(this.errors2to3.getErrorMagSum() / numPoints);
+        sd = new StandardDeviation();
+        this.errors2to3.setErrorStdDev(sd.evaluate(errorMagnitudes2to3));
 
         printStats();
 
@@ -288,29 +294,46 @@ public class TsaiCalib {
             RealVector realSolvedTs = ParametricEquationSolver.parametricZeroInterceptTSolve(realCameraOriginWorldFrame, parallelVector);
 
             List<RealVector> solvedParametricPoints = new ArrayList<RealVector>();
-            for (int i = 0; i < realSolvedTs.getDimension(); i++) {
-                solvedParametricPoints.add(ParametricEquationSolver.solvePointGivenT(realCameraOriginWorldFrame, parallelVector, realSolvedTs.getEntry(i)));
-            }
-
+            double minError = 0;
+            RealVector minErrorVec = null;
             List<Double> parametricPointErrorMagnitudes = new ArrayList<Double>();
-            for (RealVector solvedPoint : solvedParametricPoints) {
-                parametricPointErrorMagnitudes.add(ErrorAnalysisSolver.calculateVectorErrorMagnitude(solvedPoint.getSubVector(0,3), wp.getWorldPointVector()));
+            for (int i = 0; i < realSolvedTs.getDimension(); i++) {
+                RealVector solvedPoint = ParametricEquationSolver.solvePointGivenT(realCameraOriginWorldFrame, parallelVector, realSolvedTs.getEntry(i));
+                solvedParametricPoints.add(solvedPoint);
+                double error = ErrorAnalysisSolver.calculateVectorErrorMagnitude(solvedPoint.getSubVector(0,3), wp.getWorldPointVector());
+                parametricPointErrorMagnitudes.add(error);
+
+                if (Math.abs(error) < Math.abs(minError) || i == 0) {
+                    minErrorVec = solvedPoint;
+                    minError = error;
+                }
             }
 
+            wp.setEstimatedWorldPoint(Point3D.convertFromRealVector(minErrorVec));
         }
 
     }
 
-    private double[] calculateErrorSum() {
+    private double[] calculateErrorSum(boolean backProjected) {
         double[] errorMagnitudes = new double[numPoints];
         double errorMagSum = 0;
         for (WorldPoint wp : calibrationPoints) {
-            double errorMag =  WorldPoint.calculateErrorMagnitude(wp.getRawImagePoint(), wp.getEstimatedProcessedImagePoint());
+            double errorMag;
+            if (backProjected) {
+                errorMag = ErrorAnalysisSolver.calculateVectorErrorMagnitude(wp.getEstimatedWorldPoint().getAsRealVector(), wp.getWorldPointVector());
+            } else {
+                errorMag =  WorldPoint.calculateErrorMagnitude(wp.getRawImagePoint(), wp.getEstimatedProcessedImagePoint());
+            }
+
             errorMagSum += errorMag;
             errorMagnitudes[wp.getId()-1] = errorMag;
         }
 
-        this.errorMagSum = errorMagSum;
+        if (backProjected) {
+            this.errors2to3.setErrorMagSum(errorMagSum);
+        } else {
+            this.errors3to2.setErrorMagSum(errorMagSum);
+        }
 
         return errorMagnitudes;
     }
@@ -323,10 +346,10 @@ public class TsaiCalib {
         System.out.println("sX, " + this.sX);
         printPadding();
         System.out.println("3D to 2D errors");
-        System.out.println("Average Error, " + this.averageError );
-        System.out.println("Average StdDev, " + this.errorStdDev );
+        this.errors3to2.printStats();
         printPadding();
         System.out.println("2D to 3D errors");
+        this.errors2to3.printStats();
 
     }
 
