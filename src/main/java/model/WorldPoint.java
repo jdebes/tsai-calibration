@@ -5,6 +5,8 @@ import org.apache.commons.math3.linear.RealVector;
 
 import java.awt.*;
 import java.awt.geom.Point2D;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Created by jdeb860 on 3/23/2017.
@@ -63,6 +65,23 @@ public class WorldPoint {
         double w = homogeneous3DVector.getEntry(2);
         this.estimatedProcessedImagePoint = new Point((int) Math.round(homogeneous3DVector.getEntry(0) / w), (int) Math.round(homogeneous3DVector.getEntry(1) / w));
 
+    }
+
+    public List<String> toCsvList() {
+        List<String> csvList = new ArrayList<>();
+        //csvList.add(String.valueOf(this.id));
+        csvList.add(String.valueOf(this.x));
+        csvList.add(String.valueOf(this.y));
+        csvList.add(String.valueOf(this.z));
+        csvList.add(String.valueOf(this.estimatedWorldPoint.getX()));
+        csvList.add(String.valueOf(this.estimatedWorldPoint.getY()));
+        csvList.add(String.valueOf(this.estimatedWorldPoint.getZ()));
+        csvList.add("##");
+        csvList.add(String.valueOf(this.rawImagePoint.x));
+        csvList.add(String.valueOf(this.rawImagePoint.y));
+        csvList.add(String.valueOf(this.estimatedProcessedImagePoint.x));
+        csvList.add(String.valueOf(this.estimatedProcessedImagePoint.y));
+        return csvList;
     }
 
     public int getId() {

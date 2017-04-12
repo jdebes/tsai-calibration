@@ -4,7 +4,9 @@ import model.RotationTranslation;
 import model.WorldPoint;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
+import org.apache.commons.csv.CSVPrinter;
 import org.apache.commons.csv.CSVRecord;
+import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.math3.geometry.euclidean.threed.Vector3D;
 import org.apache.commons.math3.linear.MatrixUtils;
 import org.apache.commons.math3.linear.QRDecomposition;
@@ -17,6 +19,7 @@ import util.ParametricEquationSolver;
 import java.awt.*;
 import java.awt.geom.Point2D;
 import java.io.FileReader;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -30,6 +33,7 @@ public class TsaiCalib {
     private static final String INPUT_FILE_PATH = "C:\\Users\\jdeb860\\Desktop\\tsai-data\\ImageEric\\tsaiInput.csv";
     private static final String INPUT_PARAMS_PATH = "C:\\Users\\jdeb860\\Desktop\\tsai-data\\ImageEric\\params.csv";
     private static final String[] FILE_HEADER_MAPPING = {"id","wx","wy","wz","px", "py"};
+    private static final String[] RESULTS_HEADER_MAPPING = {"wx","wy","wz", "ex", "ey", "ez", "##","px", "py", "epx", "epy"};
     private static final String[] PARAMS_HEADER_MAPPING = {"desc", "value"};
 
     //Additional Known Values
@@ -155,6 +159,8 @@ public class TsaiCalib {
 
         printStats();
 
+        writeCalibrationPointsToCSV();
+
         return;
 
     }
@@ -240,7 +246,7 @@ public class TsaiCalib {
         RealMatrix realTransMatrix2D = MatrixUtils.inverse(realTransMatrix2DInv);
         RealMatrix realRotationTranslationMatrix = rotationTranslation.getRotationTranslationMatrix();
 
-        /*        
+        /*        w => z homo to 2d
         f 0 0   same as 1 0 0  xc = (f * x) / w = x / (w / f)
         0 f 0           0 1 0
         0 0 1           0 0 1/f
@@ -256,6 +262,7 @@ public class TsaiCalib {
             RealVector realWorldVector = worldPoint.getWorldPointVector().append(1.0);
             RealVector estimated2dHomoVector = realTransMatrix2D.operate(realFocalMatrix.operate(realRotationTranslationMatrix.operate(realWorldVector)));
             worldPoint.setEstimatedProcessedImagePoint(estimated2dHomoVector);
+
         }
     }
 
@@ -352,6 +359,38 @@ public class TsaiCalib {
         this.errors2to3.printStats();
 
     }
+
+    private void writeCalibrationPointsToCSV() {
+        CSVFormat csvFileFormat = CSVFormat.DEFAULT.withRecordSeparator("\n");
+        String fileName = FilenameUtils.getFullPath(INPUT_FILE_PATH) + FilenameUtils.getBaseName(INPUT_FILE_PATH) + "_results." + FilenameUtils.getExtension(INPUT_FILE_PATH);
+
+        FileWriter fileWriter = null;
+        CSVPrinter csvFilePrinter = null;
+
+        try {
+            fileWriter = new FileWriter(fileName);
+            csvFilePrinter = new CSVPrinter(fileWriter, csvFileFormat);
+
+            for (WorldPoint wp : calibrationPoints) {
+                csvFilePrinter.printRecord(wp.toCsvList());
+            }
+
+            printPadding();
+            System.out.println("Results written to " + fileName);
+
+        } catch (Exception e) {
+            System.out.println("Error writing results to csv");
+        }
+
+        try {
+            fileWriter.flush();
+            fileWriter.close();
+            csvFilePrinter.close();
+        } catch (Exception e) {
+            System.out.println("Cant close writing resources");
+        }
+    }
+
 
     private void printPadding() {
         System.out.println("--------");
