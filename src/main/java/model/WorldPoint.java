@@ -20,6 +20,10 @@ public class WorldPoint {
     private Point2D.Double processedImagePoint;
     private Point estimatedProcessedImagePoint;
     private Point3D estimatedWorldPoint;
+    private double d3Error;
+    private double d2Error;
+    private double d3K1;
+    private double d2K1;
 
     public WorldPoint(int id, double x, double y, double z, Point rawImagePoint) {
         this.id = id;
@@ -81,6 +85,10 @@ public class WorldPoint {
         csvList.add(String.valueOf(this.rawImagePoint.y));
         csvList.add(String.valueOf(this.estimatedProcessedImagePoint.x));
         csvList.add(String.valueOf(this.estimatedProcessedImagePoint.y));
+        csvList.add("##");
+        csvList.add(String.valueOf(this.getD3Error()));
+        csvList.add(String.valueOf(this.getD2Error()));
+        csvList.add(String.valueOf(this.getD3K1()));
         return csvList;
     }
 
@@ -138,5 +146,37 @@ public class WorldPoint {
 
     public void setEstimatedWorldPoint(Point3D estimatedWorldPoint) {
         this.estimatedWorldPoint = estimatedWorldPoint;
+    }
+
+    public double getD3Error() {
+        return d3Error;
+    }
+
+    public void setD3Error(double d3Error) {
+        this.d3Error = d3Error;
+    }
+
+    public double getD2Error() {
+        return d2Error;
+    }
+
+    public void setD2Error(double d2Error) {
+        this.d2Error = d2Error;
+    }
+
+    public double getD3K1() {
+        return d3K1;
+    }
+
+    public void setD3K1(double d3K1) {
+        this.d3K1 = d3K1;
+    }
+
+    public double getD2K1() {
+        return d2K1;
+    }
+
+    public void setD2K1(double d2K1) {
+        this.d2K1 = d2K1;
     }
 }

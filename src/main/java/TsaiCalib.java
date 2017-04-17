@@ -30,8 +30,8 @@ import java.util.List;
  */
 public class TsaiCalib {
     private List<WorldPoint> calibrationPoints = new ArrayList<WorldPoint>();
-    private static final String INPUT_FILE_PATH = "C:\\Users\\jdeb860\\Desktop\\tsai-data\\ImageEric\\tsaiInput.csv";
-    private static final String INPUT_PARAMS_PATH = "C:\\Users\\jdeb860\\Desktop\\tsai-data\\ImageEric\\params.csv";
+    private static final String INPUT_FILE_PATH = "/home/jonas/Desktop/tsai-data/Image4/tsaiInputFA.csv";
+    private static final String INPUT_PARAMS_PATH = "/home/jonas/Desktop/tsai-data/Image4/params.csv";
     private static final String[] FILE_HEADER_MAPPING = {"id","wx","wy","wz","px", "py"};
     private static final String[] RESULTS_HEADER_MAPPING = {"wx","wy","wz", "ex", "ey", "ez", "##","px", "py", "epx", "epy"};
     private static final String[] PARAMS_HEADER_MAPPING = {"desc", "value"};
@@ -51,6 +51,9 @@ public class TsaiCalib {
     private ErrorStats errors3to2 = new ErrorStats();
 
     private ErrorStats errors2to3 = new ErrorStats();
+
+    double k1D3;
+    double k1D2;
 
 
 
@@ -151,11 +154,16 @@ public class TsaiCalib {
         StandardDeviation sd = new StandardDeviation();
         this.errors3to2.setErrorStdDev(sd.evaluate(errorMagnitudes));
 
+
         calculate2Dto3DProjectedPoints();
         double[] errorMagnitudes2to3 = calculateErrorSum(true);
         this.errors2to3.setAverageError(this.errors2to3.getErrorMagSum() / numPoints);
         sd = new StandardDeviation();
         this.errors2to3.setErrorStdDev(sd.evaluate(errorMagnitudes2to3));
+
+        doK1();
+        this.k1D3 = getAvgK1(true);
+        this.k1D2 = getAvgK1(false);
 
         printStats();
 
@@ -328,8 +336,10 @@ public class TsaiCalib {
             double errorMag;
             if (backProjected) {
                 errorMag = ErrorAnalysisSolver.calculateVectorErrorMagnitude(wp.getEstimatedWorldPoint().getAsRealVector(), wp.getWorldPointVector());
+                wp.setD3Error(errorMag);
             } else {
                 errorMag =  WorldPoint.calculateErrorMagnitude(wp.getRawImagePoint(), wp.getEstimatedProcessedImagePoint());
+                wp.setD2Error(errorMag);
             }
 
             errorMagSum += errorMag;
@@ -357,6 +367,7 @@ public class TsaiCalib {
         printPadding();
         System.out.println("2D to 3D errors");
         this.errors2to3.printStats();
+        System.out.println("K1: " + this.k1D3);
 
     }
 
@@ -394,6 +405,31 @@ public class TsaiCalib {
 
     private void printPadding() {
         System.out.println("--------");
+    }
+
+    private double calculateK1(double avgError, double estimatedDistance) {
+        return avgError / Math.pow(estimatedDistance,3);
+    }
+
+    private void doK1() {
+        for (WorldPoint wp : calibrationPoints) {
+            wp.setD3K1(calculateK1(wp.getD3Error(), wp.getWorldPointVector().getNorm()));
+            wp.setD2K1(calculateK1(wp.getD2Error(), wp.getProcessedImagePointVector().getNorm()));
+        }
+    }
+
+    private double getAvgK1(boolean backProjected) {
+        double sum = 0;
+        for (WorldPoint wp : calibrationPoints) {
+            if (backProjected) {
+                sum += wp.getD3K1();
+            } else {
+                sum += wp.getD2K1();
+            }
+
+        }
+
+        return sum / numPoints;
     }
 
 }
