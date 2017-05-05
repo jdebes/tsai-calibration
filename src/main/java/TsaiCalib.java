@@ -30,11 +30,12 @@ import java.util.List;
  */
 public class TsaiCalib {
     private List<WorldPoint> calibrationPoints = new ArrayList<WorldPoint>();
-    private static final String INPUT_FILE_PATH = "/home/jonas/Desktop/tsai-data/Image4/tsaiInputFA.csv";
-    private static final String INPUT_PARAMS_PATH = "/home/jonas/Desktop/tsai-data/Image4/params.csv";
+    private static final String INPUT_FILE_PATH = "C:\\Users\\jdeb860\\Desktop\\tsai-data\\Image1\\tsaiInputFull.csv";
+    private static final String INPUT_PARAMS_PATH = "C:\\Users\\jdeb860\\Desktop\\tsai-data\\Image1\\params.csv";
     private static final String[] FILE_HEADER_MAPPING = {"id","wx","wy","wz","px", "py"};
     private static final String[] RESULTS_HEADER_MAPPING = {"wx","wy","wz", "ex", "ey", "ez", "##","px", "py", "epx", "epy"};
     private static final String[] PARAMS_HEADER_MAPPING = {"desc", "value"};
+    private static final boolean STEREO = false;
 
     //Additional Known Values
     private int numPoints;
@@ -164,7 +165,7 @@ public class TsaiCalib {
         this.k1D3 = getAvgK1(true);
         this.k1D2 = getAvgK1(false);
 
-        double finalErrorAverage = optimiseFTzK(rotationTranslation, focalLength, rotationTranslation.getTransZ(), 0, 10);
+        double finalErrorAverage = optimiseFTzK(rotationTranslation, focalLength, rotationTranslation.getTransZ(), 0, 300);
 
         printStats();
 
@@ -176,7 +177,7 @@ public class TsaiCalib {
 
     private double optimiseFTzK(RotationTranslation rotationTranslation, double initialF, double initialTz, double intialK, int numIterations) {
 
-        double percentIncrease = 0.05;
+        double percentIncrease = 0.00001;
         List<Double> optimisedErrorAvg = new ArrayList<>();
 
         for (int f = -numIterations; f < numIterations; f++ ) {
@@ -220,10 +221,14 @@ public class TsaiCalib {
                         RealVector realWorldVector = worldPoint.getWorldPointVector().append(1.0);
                         RealVector estimated2dHomoVector = realTransMatrix2D.operate(realFocalMatrix.operate(realRotationTranslationMatrix.operate(realWorldVector)));
 
+                        double[] estimatedPoint = new double[] { Math.round(estimated2dHomoVector.getEntry(0) / estimated2dHomoVector.getEntry(2)), Math.round(estimated2dHomoVector.getEntry(1) / estimated2dHomoVector.getEntry(2)) };
+                        RealVector estimatedRealPoint = MatrixUtils.createRealVector(estimatedPoint);
+
                         double[] rawImagePoint = {worldPoint.getRawImagePoint().getX(), worldPoint.getRawImagePoint().getY()};
                         RealVector realRawImagePoint = MatrixUtils.createRealVector(rawImagePoint);
 
-                        errorList.add(realRawImagePoint.subtract(estimated2dHomoVector).getNorm());
+
+                        errorList.add(realRawImagePoint.subtract(estimatedRealPoint).getNorm());
                     }
 
                     optimisedErrorAvg.add(errorList.stream().mapToDouble(x -> x).average().getAsDouble());
@@ -332,6 +337,7 @@ public class TsaiCalib {
         for (WorldPoint worldPoint : calibrationPoints) {
             RealVector realWorldVector = worldPoint.getWorldPointVector().append(1.0);
             RealVector estimated2dHomoVector = realTransMatrix2D.operate(realFocalMatrix.operate(realRotationTranslationMatrix.operate(realWorldVector)));
+
             worldPoint.setEstimatedProcessedImagePoint(estimated2dHomoVector);
 
         }
