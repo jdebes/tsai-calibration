@@ -29,15 +29,14 @@ import java.util.List;
  * Created by jdeb860 on 3/23/2017.
  */
 public class TsaiCalib {
-    private List<WorldPoint> calibrationPoints = new ArrayList<WorldPoint>();
-    private static final String INPUT_FILE_PATH = "C:\\Users\\jdeb860\\Desktop\\tsai-data\\Image1\\tsaiInputFull.csv";
-    private static final String INPUT_PARAMS_PATH = "C:\\Users\\jdeb860\\Desktop\\tsai-data\\Image1\\params.csv";
     private static final String[] FILE_HEADER_MAPPING = {"id","wx","wy","wz","px", "py"};
-    private static final String[] RESULTS_HEADER_MAPPING = {"wx","wy","wz", "ex", "ey", "ez", "##","px", "py", "epx", "epy"};
     private static final String[] PARAMS_HEADER_MAPPING = {"desc", "value"};
-    private static final boolean STEREO = false;
 
     //Additional Known Values
+    private final String inputFilePath;
+    private final String inputParamsPath;
+
+    private List<WorldPoint> calibrationPoints = new ArrayList<WorldPoint>();
     private int numPoints;
     private Point2D.Double imageCenter;
     private double pixelWidth;
@@ -53,20 +52,18 @@ public class TsaiCalib {
 
     private ErrorStats errors2to3 = new ErrorStats();
 
-    double k1D3;
-    double k1D2;
+    private double k1D3;
+    private double k1D2;
 
-
-
-    public static void main(String[] args) {
-        TsaiCalib tsaiCalib = new TsaiCalib();
-        tsaiCalib.start(args);
+    public TsaiCalib(String inputFilePath, String inputParamsPath) {
+        this.inputFilePath = inputFilePath;
+        this.inputParamsPath = inputParamsPath;
     }
 
-    private void start(String[] args) {
+    public void start() {
         try {
             CSVFormat csvFileFormat =  CSVFormat.DEFAULT.withHeader(FILE_HEADER_MAPPING);
-            FileReader fileReader = new FileReader(INPUT_FILE_PATH);
+            FileReader fileReader = new FileReader(inputFilePath);
             CSVParser csvFileParser = new CSVParser(fileReader, csvFileFormat);
             List<CSVRecord> csvRecords = csvFileParser.getRecords();
 
@@ -77,7 +74,7 @@ public class TsaiCalib {
             }
 
             csvFileFormat =  CSVFormat.DEFAULT.withHeader(PARAMS_HEADER_MAPPING);
-            fileReader = new FileReader(INPUT_PARAMS_PATH);
+            fileReader = new FileReader(inputParamsPath);
             csvFileParser = new CSVParser(fileReader, csvFileFormat);
             csvRecords = csvFileParser.getRecords();
 
@@ -165,7 +162,7 @@ public class TsaiCalib {
         this.k1D3 = getAvgK1(true);
         this.k1D2 = getAvgK1(false);
 
-        double finalErrorAverage = optimiseFTzK(rotationTranslation, focalLength, rotationTranslation.getTransZ(), 0, 300);
+       // double finalErrorAverage = optimiseFTzK(rotationTranslation, focalLength, rotationTranslation.getTransZ(), 0, 300);
 
         printStats();
 
@@ -442,7 +439,7 @@ public class TsaiCalib {
 
     private void writeCalibrationPointsToCSV() {
         CSVFormat csvFileFormat = CSVFormat.DEFAULT.withRecordSeparator("\n");
-        String fileName = FilenameUtils.getFullPath(INPUT_FILE_PATH) + FilenameUtils.getBaseName(INPUT_FILE_PATH) + "_results." + FilenameUtils.getExtension(INPUT_FILE_PATH);
+        String fileName = FilenameUtils.getFullPath(inputFilePath) + FilenameUtils.getBaseName(inputFilePath) + "_results." + FilenameUtils.getExtension(inputFilePath);
 
         FileWriter fileWriter = null;
         CSVPrinter csvFilePrinter = null;
