@@ -1,4 +1,4 @@
-package model;
+package tsai.model;
 
 import org.apache.commons.math3.linear.MatrixUtils;
 import org.apache.commons.math3.linear.RealMatrix;

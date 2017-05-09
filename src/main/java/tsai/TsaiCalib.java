@@ -1,7 +1,12 @@
-import model.ErrorStats;
-import model.Point3D;
-import model.RotationTranslation;
-import model.WorldPoint;
+package tsai;
+
+import org.apache.commons.math3.geometry.Vector;
+import org.apache.commons.math3.geometry.euclidean.threed.Line;
+import org.apache.commons.math3.geometry.euclidean.threed.Vector3DFormat;
+import tsai.model.ErrorStats;
+import tsai.model.Point3D;
+import tsai.model.RotationTranslation;
+import tsai.model.WorldPoint;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVPrinter;
@@ -13,8 +18,8 @@ import org.apache.commons.math3.linear.QRDecomposition;
 import org.apache.commons.math3.linear.RealMatrix;
 import org.apache.commons.math3.linear.RealVector;
 import org.apache.commons.math3.stat.descriptive.moment.StandardDeviation;
-import util.ErrorAnalysisSolver;
-import util.ParametricEquationSolver;
+import tsai.util.ErrorAnalysisSolver;
+import tsai.util.ParametricEquationSolver;
 
 import java.awt.*;
 import java.awt.geom.Point2D;
@@ -358,12 +363,9 @@ public class TsaiCalib {
         RealMatrix realFocalMatrixInv = MatrixUtils.createRealMatrix(focalMatrixInv);
         RealMatrix realFocalMatrixInvRowPadding = MatrixUtils.createRealMatrix(focalMatrixInvRowPadding);
 
-        RealMatrix realTransMatrix2DInv = MatrixUtils.createRealMatrix(transMatrix2DInv);
         RealMatrix realRotationTranslationMatrixInv = MatrixUtils.inverse(rotationTranslation.getRotationTranslationMatrix());
 
-        double[] cameraOrigin = {0,0,0,1};
-        RealVector realCameraOrigin = MatrixUtils.createRealVector(cameraOrigin);
-        RealVector realCameraOriginWorldFrame = realRotationTranslationMatrixInv.operate(realCameraOrigin);
+        RealVector realCameraOriginWorldFrame = getCameraOriginWorldFrame();
 
         for (WorldPoint wp: calibrationPoints) {
             double[] rawImageVector = {wp.getProcessedImagePoint().getX(), wp.getProcessedImagePoint().getY(), 1.0};
@@ -498,4 +500,41 @@ public class TsaiCalib {
         return sum / numPoints;
     }
 
+    public RealVector getCameraOriginWorldFrame() {
+        RealMatrix realRotationTranslationMatrixInv = MatrixUtils.inverse(rotationTranslation.getRotationTranslationMatrix());
+
+        double[] cameraOrigin = {0,0,0,1};
+        RealVector realCameraOrigin = MatrixUtils.createRealVector(cameraOrigin);
+        RealVector realCameraOriginWorldFrame = realRotationTranslationMatrixInv.operate(realCameraOrigin);
+
+        return  realCameraOriginWorldFrame;
+    }
+
+    public List<WorldPoint> getCalibrationPoints() {
+        return calibrationPoints;
+    }
+
+    public Line getRay(WorldPoint worldPoint) {
+        final double[][] focalMatrixInv = {
+                {1/(this.sX * focalLength),0,0},
+                {0,1/(focalLength),0},
+                {0,0,1},
+                {0,0,1}
+        };
+        RealMatrix realFocalMatrixInv = MatrixUtils.createRealMatrix(focalMatrixInv);
+
+
+        RealVector cameraOriginPoint = getCameraOriginWorldFrame();
+        Vector3D cameraOrigin3D = new Vector3D(cameraOriginPoint.getEntry(0), cameraOriginPoint.getEntry(1), cameraOriginPoint.getEntry(2));
+
+        RealMatrix realRotationTranslationMatrixInv = MatrixUtils.inverse(rotationTranslation.getRotationTranslationMatrix());
+
+        double[] rawImageVector = {worldPoint.getProcessedImagePoint().getX(), worldPoint.getProcessedImagePoint().getY(), 1.0};
+        RealVector realRawImageVector = MatrixUtils.createRealVector(rawImageVector);
+        RealVector estimatedImagePoint = realRotationTranslationMatrixInv.operate(realFocalMatrixInv.operate(realRawImageVector));
+
+        Vector3D estimatedImagePoint3D = new Vector3D(estimatedImagePoint.getEntry(0), estimatedImagePoint.getEntry(1), estimatedImagePoint.getEntry(2));
+
+        return new Line(cameraOrigin3D, estimatedImagePoint3D, 1.0E-10D);
+    }
 }

@@ -1,4 +1,4 @@
-package model;
+package tsai.model;
 
 import org.apache.commons.math3.linear.MatrixUtils;
 import org.apache.commons.math3.linear.RealVector;
@@ -58,7 +58,12 @@ public class WorldPoint {
     }
 
     public Point getEstimatedProcessedImagePoint() {
-        return estimatedProcessedImagePoint;
+        return this.estimatedProcessedImagePoint;
+    }
+
+    public RealVector getEstimatedProcessedImagePointVector() {
+        double[] vector = { this.estimatedProcessedImagePoint.x, this.estimatedProcessedImagePoint.y};
+        return MatrixUtils.createRealVector(vector);
     }
 
     public void setEstimatedProcessedImagePoint(Point estimatedProcessedImagePoint) {

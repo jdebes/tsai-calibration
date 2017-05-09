@@ -1,3 +1,5 @@
+package tsai;
+
 import org.apache.commons.configuration2.Configuration;
 import org.apache.commons.configuration2.FileBasedConfiguration;
 import org.apache.commons.configuration2.PropertiesConfiguration;
@@ -5,6 +7,10 @@ import org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder;
 import org.apache.commons.configuration2.builder.fluent.Parameters;
 import org.apache.commons.configuration2.ex.ConfigurationException;
 import org.apache.commons.io.FilenameUtils;
+import org.apache.commons.math3.geometry.euclidean.threed.Line;
+import tsai.util.TsaiCalibUtils;
+
+import java.util.List;
 
 /**
  * Created by jonas on 5/05/17.
@@ -56,6 +62,10 @@ public class Application {
 
             TsaiCalib tsaiCalibRight = new TsaiCalib(withoutFile + rightFileName, inputParamsPath);
             tsaiCalibRight.start();
+
+            double baseline = TsaiCalibUtils.calculateStereoBaseline(tsaiCalib, tsaiCalibRight);
+
+            TsaiCalibUtils.getTriangulatedEstimated3DPoints(tsaiCalib, tsaiCalibRight);
         }
     }
 }

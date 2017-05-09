@@ -1,4 +1,4 @@
-package model;
+package tsai.model;
 
 /**
  * Created by jdeb860 on 4/4/2017.
