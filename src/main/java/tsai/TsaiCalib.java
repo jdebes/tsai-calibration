@@ -1,23 +1,21 @@
 package tsai;
 
-import org.apache.commons.math3.geometry.Vector;
-import org.apache.commons.math3.geometry.euclidean.threed.Line;
-import org.apache.commons.math3.geometry.euclidean.threed.Vector3DFormat;
-import tsai.model.ErrorStats;
-import tsai.model.Point3D;
-import tsai.model.RotationTranslation;
-import tsai.model.WorldPoint;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVPrinter;
 import org.apache.commons.csv.CSVRecord;
 import org.apache.commons.io.FilenameUtils;
+import org.apache.commons.math3.geometry.euclidean.threed.Line;
 import org.apache.commons.math3.geometry.euclidean.threed.Vector3D;
 import org.apache.commons.math3.linear.MatrixUtils;
 import org.apache.commons.math3.linear.QRDecomposition;
 import org.apache.commons.math3.linear.RealMatrix;
 import org.apache.commons.math3.linear.RealVector;
 import org.apache.commons.math3.stat.descriptive.moment.StandardDeviation;
+import tsai.model.ErrorStats;
+import tsai.model.Point3D;
+import tsai.model.RotationTranslation;
+import tsai.model.WorldPoint;
 import tsai.util.ErrorAnalysisSolver;
 import tsai.util.ParametricEquationSolver;
 
@@ -27,6 +25,7 @@ import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 
 
@@ -42,20 +41,20 @@ public class TsaiCalib {
     private final String inputParamsPath;
 
     private List<WorldPoint> calibrationPoints = new ArrayList<WorldPoint>();
+    private List<WorldPoint> allCalibrationPoints = new ArrayList<WorldPoint>();
     private int numPoints;
     private Point2D.Double imageCenter;
     private double pixelWidth;
     private double pixelHeight;
     private RotationTranslation rotationTranslation = new RotationTranslation();
+    private RotationTranslation optimisedRotationTranslation;
     private double focalLength;
+    private OptimiseRow optimiseRow;
     private double estimatedDistance;
     private double[][] transMatrix2DInv;
     private double sX;
 
     // 3D to 2D Error
-    private ErrorStats errors3to2 = new ErrorStats();
-
-    private ErrorStats errors2to3 = new ErrorStats();
 
     private double k1D3;
     private double k1D2;
@@ -63,6 +62,7 @@ public class TsaiCalib {
     public TsaiCalib(String inputFilePath, String inputParamsPath) {
         this.inputFilePath = inputFilePath;
         this.inputParamsPath = inputParamsPath;
+        this.allCalibrationPoints = null;
     }
 
     public void start() {
@@ -150,26 +150,45 @@ public class TsaiCalib {
 
         this.estimatedDistance = rotationTranslation.getTranslationVector().getNorm();
 
+        ErrorStats errors3to2 = new ErrorStats();
+        ErrorStats errors2to3 = new ErrorStats();
+
         calculate3Dto2DProjectedPoints();
-        double[] errorMagnitudes = calculateErrorSum(false);
-        this.errors3to2.setAverageError(this.errors3to2.getErrorMagSum() / numPoints);
+        double[] errorMagnitudes = calculateErrorSum(false, errors3to2);
+        errors3to2.setAverageError(errors3to2.getErrorMagSum() / numPoints);
         StandardDeviation sd = new StandardDeviation();
-        this.errors3to2.setErrorStdDev(sd.evaluate(errorMagnitudes));
+        errors3to2.setErrorStdDev(sd.evaluate(errorMagnitudes));
 
 
-        calculate2Dto3DProjectedPoints();
-        double[] errorMagnitudes2to3 = calculateErrorSum(true);
-        this.errors2to3.setAverageError(this.errors2to3.getErrorMagSum() / numPoints);
+        calculate2Dto3DProjectedPoints(focalLength, rotationTranslation, 0.0);
+        double[] errorMagnitudes2to3 = calculateErrorSum(true, errors2to3);
+        errors2to3.setAverageError(errors2to3.getErrorMagSum() / numPoints);
         sd = new StandardDeviation();
-        this.errors2to3.setErrorStdDev(sd.evaluate(errorMagnitudes2to3));
+        errors2to3.setErrorStdDev(sd.evaluate(errorMagnitudes2to3));
 
         doK1();
         this.k1D3 = getAvgK1(true);
         this.k1D2 = getAvgK1(false);
 
-       // double finalErrorAverage = optimiseFTzK(rotationTranslation, focalLength, rotationTranslation.getTransZ(), 0, 300);
+        printStats(errors3to2, errors2to3);
 
-        printStats();
+        this.optimisedRotationTranslation = new RotationTranslation(rotationTranslation);
+        this.optimiseRow = optimiseFTzK(this.optimisedRotationTranslation, focalLength, rotationTranslation.getTransZ(), 0.01, 30);
+        this.optimiseRow.printStats();
+        printPadding();
+
+        ErrorStats errors2to3optimised = new ErrorStats();
+
+        RotationTranslation rotationTranslationOptimised = new RotationTranslation(rotationTranslation);
+        rotationTranslationOptimised.setTransZ(this.optimiseRow.gettZ());
+
+        calculate2Dto3DProjectedPoints(this.optimiseRow.getF(), rotationTranslationOptimised, this.optimiseRow.getK1());
+        errorMagnitudes2to3 = calculateErrorSum(true, errors2to3optimised);
+        errors2to3optimised.setAverageError(errors2to3optimised.getErrorMagSum() / numPoints);
+        sd = new StandardDeviation();
+        System.out.println("Optimised back projection: ");
+        errors2to3optimised.setErrorStdDev(sd.evaluate(errorMagnitudes2to3));
+        errors2to3optimised.printStats();
 
         writeCalibrationPointsToCSV();
 
@@ -177,40 +196,24 @@ public class TsaiCalib {
 
     }
 
-    private double optimiseFTzK(RotationTranslation rotationTranslation, double initialF, double initialTz, double intialK, int numIterations) {
-
-        double percentIncrease = 0.00001;
-        List<Double> optimisedErrorAvg = new ArrayList<>();
+    private OptimiseRow optimiseFTzK(RotationTranslation rotationTranslation, double initialF, double initialTz, double initialK, int numIterations) {
+        double percentIncrease = 0.001;
+        List<OptimiseRow> optimiseRows = new ArrayList<>();
 
         for (int f = -numIterations; f < numIterations; f++ ) {
             for (int t = -numIterations; t < numIterations; t++ ) {
-               // for (int k = -numIterations; k < numIterations; k++ ) {
+               for (int k = -numIterations; k < numIterations; k++ ) {
                     List<Double> errorList = new ArrayList<>();
-
-    //                        double r = Math.pow(worldPoint.getProcessedImagePoint().getX(), 2.0) + Math.pow(worldPoint.getProcessedImagePoint().getY(), 2.0);
-    //                        double rXp = rotationTranslation.getR1()[0] * worldPoint.getX() + rotationTranslation.getR1()[1] * worldPoint.getY() + rotationTranslation.getR1()[2] * worldPoint.getZ() + rotationTranslation.getTranslationVector().getEntry(0);
-    //                        double rYp = rotationTranslation.getR2()[0] * worldPoint.getX() + rotationTranslation.getR2()[1] * worldPoint.getY() + rotationTranslation.getR2()[2] * worldPoint.getZ() + rotationTranslation.getTranslationVector().getEntry(1);
-    //                        double rYz = rotationTranslation.getR3()[0] * worldPoint.getX() + rotationTranslation.getR3()[1] * worldPoint.getY() + rotationTranslation.getR3()[2] * worldPoint.getZ() + (initialTz + initialTz * percentIncrease * t);
-    //
-    //                        double AdjustedK = intialK +  intialK * percentIncrease * k;
-    //                        double AdjustedF = initialF + initialF * percentIncrease * f;
-    //                        double xd = ((AdjustedF * f * rXp) / rYz) - worldPoint.getEstimatedProcessedImagePoint().getX() * AdjustedK * r;
-    //                        double yd = ((AdjustedF * f * rYp) / rYz) - worldPoint.getEstimatedProcessedImagePoint().getY() * AdjustedK * r;
-
-    //                        double[] adjustedVector = {xd, yd};
-    //                        RealVector adjustedRealVector = MatrixUtils.createRealVector(adjustedVector);
-    //
-    //                        double[] ydVector = {worldPoint.getEstimatedProcessedImagePoint().getX(), worldPoint.getEstimatedProcessedImagePoint().getY()};
-    //                        RealVector realYdVector = MatrixUtils.createRealVector(ydVector);
-
                     RealMatrix realTransMatrix2DInv = MatrixUtils.createRealMatrix(transMatrix2DInv);
                     RealMatrix realTransMatrix2D = MatrixUtils.inverse(realTransMatrix2DInv);
 
-                    rotationTranslation.setTransZ(initialTz + initialTz * percentIncrease * t);
+                    double adjustedTz = initialTz + initialTz * percentIncrease * t;
+                    rotationTranslation.setTransZ(adjustedTz);
 
                     double AdjustedF = initialF + initialF * percentIncrease * f;
                     RealMatrix realRotationTranslationMatrix = rotationTranslation.getRotationTranslationMatrix();
 
+                    double adjustedK1 = initialK + initialK * percentIncrease * k;
 
                     final double[][] focalMatrix = {
                             {this.sX * AdjustedF,0,0,0},
@@ -221,24 +224,36 @@ public class TsaiCalib {
 
                     for (WorldPoint worldPoint : calibrationPoints) {
                         RealVector realWorldVector = worldPoint.getWorldPointVector().append(1.0);
-                        RealVector estimated2dHomoVector = realTransMatrix2D.operate(realFocalMatrix.operate(realRotationTranslationMatrix.operate(realWorldVector)));
+                        RealVector estimated2dHomoVector = realFocalMatrix.operate(realRotationTranslationMatrix.operate(realWorldVector));
 
-                        double[] estimatedPoint = new double[] { Math.round(estimated2dHomoVector.getEntry(0) / estimated2dHomoVector.getEntry(2)), Math.round(estimated2dHomoVector.getEntry(1) / estimated2dHomoVector.getEntry(2)) };
+                        double[] estimatedPoint = new double[] { estimated2dHomoVector.getEntry(0) / estimated2dHomoVector.getEntry(2), estimated2dHomoVector.getEntry(1) / estimated2dHomoVector.getEntry(2) };
                         RealVector estimatedRealPoint = MatrixUtils.createRealVector(estimatedPoint);
+
+                        RealVector realProcImagePoint = worldPoint.getProcessedImagePointVector();
+
+                        double k1ByR2 = adjustedK1*Math.pow(realProcImagePoint.getNorm(),2);
+                        estimatedRealPoint = estimatedRealPoint.subtract(realProcImagePoint.mapMultiply(k1ByR2));
 
                         double[] rawImagePoint = {worldPoint.getRawImagePoint().getX(), worldPoint.getRawImagePoint().getY()};
                         RealVector realRawImagePoint = MatrixUtils.createRealVector(rawImagePoint);
 
+                        double[] transEstimatedPoint = {estimatedRealPoint.getEntry(0), estimatedRealPoint.getEntry(1), 1};
+                        double[] pixelEstimatedPoint = realTransMatrix2D.operate(transEstimatedPoint);
+                        RealVector realPixelEstimatedPoint = MatrixUtils.createRealVector(new double[] {pixelEstimatedPoint[0], pixelEstimatedPoint[1]});
 
-                        errorList.add(realRawImagePoint.subtract(estimatedRealPoint).getNorm());
+                        errorList.add(realRawImagePoint.subtract(realPixelEstimatedPoint).getNorm());
                     }
+                    StandardDeviation sd = new StandardDeviation();
+                    double stdDev = sd.evaluate(errorList.stream().mapToDouble(x -> x).toArray());
 
-                    optimisedErrorAvg.add(errorList.stream().mapToDouble(x -> x).average().getAsDouble());
-                //}
+                    OptimiseRow optimiseRow = new OptimiseRow(adjustedK1, AdjustedF, adjustedTz, errorList.stream().mapToDouble(x -> x).average().getAsDouble(), stdDev);
+                    optimiseRows.add(optimiseRow);
+                }
             }
         }
 
-        return optimisedErrorAvg.stream().min(Double::compare).orElse(null);
+        final Comparator<OptimiseRow> comp = (or1, or2) -> Double.compare(or1.getError(), or2.getError());
+        return optimiseRows.stream().min(comp).orElse(null);
     }
 
 
@@ -345,7 +360,7 @@ public class TsaiCalib {
         }
     }
 
-    private void calculate2Dto3DProjectedPoints() {
+    private void calculate2Dto3DProjectedPoints(double focalLength, RotationTranslation rotationTranslation, double k1) {
         final double[][] focalMatrixInv = {
                 {1/(this.sX * focalLength),0,0},
                 {0,1/(focalLength),0},
@@ -365,10 +380,13 @@ public class TsaiCalib {
 
         RealMatrix realRotationTranslationMatrixInv = MatrixUtils.inverse(rotationTranslation.getRotationTranslationMatrix());
 
-        RealVector realCameraOriginWorldFrame = getCameraOriginWorldFrame();
+        RealVector realCameraOriginWorldFrame = getCameraOriginWorldFrame(rotationTranslation, focalLength);
 
         for (WorldPoint wp: calibrationPoints) {
-            double[] rawImageVector = {wp.getProcessedImagePoint().getX(), wp.getProcessedImagePoint().getY(), 1.0};
+            double k1ByR2 = k1*Math.pow(wp.getProcessedImagePointVector().getNorm(), 2);
+            RealVector undistortedImagePoint = wp.getProcessedImagePointVector().add(wp.getProcessedImagePointVector().mapMultiply(k1ByR2));
+
+            double[] rawImageVector = {undistortedImagePoint.getEntry(0), undistortedImagePoint.getEntry(1), 1.0};
             RealVector realRawImageVector = MatrixUtils.createRealVector(rawImageVector);
             RealVector estimatedImagePoint = realRotationTranslationMatrixInv.operate(realFocalMatrixInv.operate(realRawImageVector));
 
@@ -397,7 +415,7 @@ public class TsaiCalib {
 
     }
 
-    private double[] calculateErrorSum(boolean backProjected) {
+    private double[] calculateErrorSum(boolean backProjected, ErrorStats errorStats) {
         double[] errorMagnitudes = new double[numPoints];
         double errorMagSum = 0;
         for (WorldPoint wp : calibrationPoints) {
@@ -414,16 +432,12 @@ public class TsaiCalib {
             errorMagnitudes[wp.getId()-1] = errorMag;
         }
 
-        if (backProjected) {
-            this.errors2to3.setErrorMagSum(errorMagSum);
-        } else {
-            this.errors3to2.setErrorMagSum(errorMagSum);
-        }
+        errorStats.setErrorMagSum(errorMagSum);
 
         return errorMagnitudes;
     }
 
-    private void printStats() {
+    private void printStats(ErrorStats errorStats3to2, ErrorStats errorStats2to3) {
         rotationTranslation.printRotationTranslationMatrix();
         printPadding();
         System.out.println("Estimated Distance, " +  this.estimatedDistance);
@@ -431,11 +445,13 @@ public class TsaiCalib {
         System.out.println("sX, " + this.sX);
         printPadding();
         System.out.println("3D to 2D errors");
-        this.errors3to2.printStats();
+        errorStats3to2.printStats();
+        System.out.println("K1: " + this.k1D2);
         printPadding();
         System.out.println("2D to 3D errors");
-        this.errors2to3.printStats();
+        errorStats2to3.printStats();
         System.out.println("K1: " + this.k1D3);
+        printPadding();
 
     }
 
@@ -500,7 +516,7 @@ public class TsaiCalib {
         return sum / numPoints;
     }
 
-    public RealVector getCameraOriginWorldFrame() {
+    public RealVector getCameraOriginWorldFrame(RotationTranslation rotationTranslation, double focalLength) {
         RealMatrix realRotationTranslationMatrixInv = MatrixUtils.inverse(rotationTranslation.getRotationTranslationMatrix());
 
         double[] cameraOrigin = {0,0,0,1};
@@ -510,11 +526,15 @@ public class TsaiCalib {
         return  realCameraOriginWorldFrame;
     }
 
+    public RealVector getCameraOriginWorldFrame() {
+        return getCameraOriginWorldFrame(this.rotationTranslation, this.focalLength);
+    }
+
     public List<WorldPoint> getCalibrationPoints() {
         return calibrationPoints;
     }
 
-    public Line getRay(WorldPoint worldPoint) {
+    public Line getRay(WorldPoint worldPoint, double focalLength, RotationTranslation rotationTranslation, double k1) {
         final double[][] focalMatrixInv = {
                 {1/(this.sX * focalLength),0,0},
                 {0,1/(focalLength),0},
@@ -523,18 +543,78 @@ public class TsaiCalib {
         };
         RealMatrix realFocalMatrixInv = MatrixUtils.createRealMatrix(focalMatrixInv);
 
-
-        RealVector cameraOriginPoint = getCameraOriginWorldFrame();
+        RealVector cameraOriginPoint = getCameraOriginWorldFrame(rotationTranslation, focalLength);
         Vector3D cameraOrigin3D = new Vector3D(cameraOriginPoint.getEntry(0), cameraOriginPoint.getEntry(1), cameraOriginPoint.getEntry(2));
 
         RealMatrix realRotationTranslationMatrixInv = MatrixUtils.inverse(rotationTranslation.getRotationTranslationMatrix());
 
-        double[] rawImageVector = {worldPoint.getProcessedImagePoint().getX(), worldPoint.getProcessedImagePoint().getY(), 1.0};
+        double k1ByR2 = k1*Math.pow(worldPoint.getProcessedImagePointVector().getNorm(), 2);
+        RealVector undistortedImagePoint = worldPoint.getProcessedImagePointVector().add(worldPoint.getProcessedImagePointVector().mapMultiply(k1ByR2));
+        double[] rawImageVector = {undistortedImagePoint.getEntry(0), undistortedImagePoint.getEntry(1), 1.0};
         RealVector realRawImageVector = MatrixUtils.createRealVector(rawImageVector);
+
+
         RealVector estimatedImagePoint = realRotationTranslationMatrixInv.operate(realFocalMatrixInv.operate(realRawImageVector));
 
         Vector3D estimatedImagePoint3D = new Vector3D(estimatedImagePoint.getEntry(0), estimatedImagePoint.getEntry(1), estimatedImagePoint.getEntry(2));
 
         return new Line(cameraOrigin3D, estimatedImagePoint3D, 1.0E-10D);
+    }
+
+    public Line getRay(WorldPoint worldPoint) {
+        return getRay(worldPoint, this.focalLength, this.rotationTranslation, 0.0);
+    }
+
+    public static class OptimiseRow {
+        private final double k1;
+        private final double f;
+        private final double tZ;
+        private final double error;
+        private final double stdDev;
+
+        public OptimiseRow(double k1, double f, double tZ, double error, double stdDev) {
+            this.k1 = k1;
+            this.f = f;
+            this.tZ = tZ;
+            this.error = error;
+            this.stdDev = stdDev;
+        }
+
+        public double getK1() {
+            return k1;
+        }
+
+        public double getF() {
+            return f;
+        }
+
+        public double gettZ() {
+            return tZ;
+        }
+
+        public double getError() {
+            return error;
+        }
+
+        public double getStdDev() {
+            return stdDev;
+        }
+
+        public void printStats() {
+            System.out.println("Optimisation Complete: ");
+            System.out.println("K1: " + k1);
+            System.out.println("focal" + f);
+            System.out.println("Tz: " + tZ);
+            System.out.println("Avg Error (Px): " + error);
+            System.out.println("Error StdDev: " + stdDev);
+        }
+    }
+
+    public RotationTranslation getOptimisedRotationTranslation() {
+        return optimisedRotationTranslation;
+    }
+
+    public OptimiseRow getOptimiseRow() {
+        return optimiseRow;
     }
 }

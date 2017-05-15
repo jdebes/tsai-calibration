@@ -1,5 +1,7 @@
 package tsai.util;
 
+import org.apache.commons.math3.geometry.euclidean.threed.Vector3D;
+import org.apache.commons.math3.linear.MatrixUtils;
 import org.apache.commons.math3.linear.RealVector;
 
 /**
@@ -17,5 +19,9 @@ public class ErrorAnalysisSolver {
 
     public static double calculateVectorErrorMagnitude(RealVector estimatedValue, RealVector knownValue) {
         return calculateVectorError(estimatedValue, knownValue).getNorm();
+    }
+
+    public static RealVector vector3DToRealVector(Vector3D vector3D) {
+        return MatrixUtils.createRealVector(vector3D.toArray());
     }
 }

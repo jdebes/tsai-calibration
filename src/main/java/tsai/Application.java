@@ -7,10 +7,7 @@ import org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder;
 import org.apache.commons.configuration2.builder.fluent.Parameters;
 import org.apache.commons.configuration2.ex.ConfigurationException;
 import org.apache.commons.io.FilenameUtils;
-import org.apache.commons.math3.geometry.euclidean.threed.Line;
 import tsai.util.TsaiCalibUtils;
-
-import java.util.List;
 
 /**
  * Created by jonas on 5/05/17.
@@ -21,11 +18,13 @@ public class Application {
     private final String inputFilePath;
     private final String inputParamsPath;
     private final boolean isStereo;
+    private final String inputFilePathClose;
 
-    private Application(String inputFilePath, String inputParamsPath, boolean isStereo) {
+    private Application(String inputFilePath, String inputParamsPath, boolean isStereo, String inputFilePathClose) {
         this.inputFilePath = inputFilePath;
         this.inputParamsPath = inputParamsPath;
         this.isStereo = isStereo;
+        this.inputFilePathClose = inputFilePathClose;
     }
 
     private static Application getInstance() {
@@ -36,7 +35,7 @@ public class Application {
 
         try {
             Configuration config = builder.getConfiguration();
-            return new Application(config.getString("input.file"), config.getString("input.params"), config.getBoolean("input.stereo"));
+            return new Application(config.getString("input.file"), config.getString("input.params"), config.getBoolean("input.stereo"), config.getString("input.file.initial"));
         } catch(ConfigurationException cex) {
             System.err.println("Unable to read " + PROPERTIES_FILE_NAME);
         }
@@ -56,6 +55,7 @@ public class Application {
         tsaiCalib.start();
 
         if (isStereo) {
+            System.out.println("######### Right Stereo #########");
             String withoutFile = FilenameUtils.getFullPath(inputFilePath);
             String leftFileName = FilenameUtils.getName(inputFilePath);
             String rightFileName = leftFileName.replaceFirst("left", "right");
@@ -63,9 +63,16 @@ public class Application {
             TsaiCalib tsaiCalibRight = new TsaiCalib(withoutFile + rightFileName, inputParamsPath);
             tsaiCalibRight.start();
 
+            System.out.println("######### Stereo Results #########");
             double baseline = TsaiCalibUtils.calculateStereoBaseline(tsaiCalib, tsaiCalibRight);
+            System.out.println("Baseline: " + baseline);
 
-            TsaiCalibUtils.getTriangulatedEstimated3DPoints(tsaiCalib, tsaiCalibRight);
+
+            //List<Vector3D> triangulatedPoints = TsaiCalibUtils.getTriangulatedEstimated3DPoints(tsaiCalib, tsaiCalibRight);
+            TsaiCalibUtils.getTriangulatedEstimated3DError(tsaiCalib, tsaiCalibRight, false);
+            TsaiCalibUtils.getTriangulatedEstimated3DError(tsaiCalib, tsaiCalibRight, true);
+
+
         }
     }
 }

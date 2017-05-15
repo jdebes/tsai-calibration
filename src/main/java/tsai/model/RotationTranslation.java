@@ -20,6 +20,20 @@ public class RotationTranslation {
     private double[] r2;
     private double[] r3;
 
+    public RotationTranslation() {
+
+    }
+
+    public RotationTranslation(RotationTranslation copy) {
+        this.transX = copy.getTransX();
+        this.transY = copy.getTransY();
+        this.transZ = copy.getTransZ();
+
+        this.r1 = copy.getR1();
+        this.r2 = copy.getR2();
+        this.r3 = copy.getR3();
+    }
+
     public RealMatrix getRotationTranslationMatrix() {
         List<RealVector> vectors = getRotationVectors();
         vectors.set(0, vectors.get(0).append(transX));

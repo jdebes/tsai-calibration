@@ -3,10 +3,12 @@ package tsai.util;
 import org.apache.commons.math3.geometry.euclidean.threed.Line;
 import org.apache.commons.math3.geometry.euclidean.threed.Vector3D;
 import org.apache.commons.math3.linear.RealVector;
+import org.apache.commons.math3.stat.descriptive.moment.StandardDeviation;
 import tsai.TsaiCalib;
 import tsai.model.WorldPoint;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -32,7 +34,7 @@ public class TsaiCalibUtils {
         return left.getCameraOriginWorldFrame().getDistance(right.getCameraOriginWorldFrame());
     }
 
-    public static List<Vector3D> getTriangulatedEstimated3DPoints(TsaiCalib left, TsaiCalib right) {
+    public static List<Vector3D> getTriangulatedEstimated3DPoints(TsaiCalib left, TsaiCalib right, boolean useOptimised) {
         List<WorldPoint> leftPoints = left.getCalibrationPoints();
         List<WorldPoint> rightPoints = right.getCalibrationPoints();
 
@@ -41,6 +43,12 @@ public class TsaiCalibUtils {
         for (int i = 0; i < left.getCalibrationPoints().size(); i++) {
             Line leftRay = left.getRay(leftPoints.get(i));
             Line rightRay = right.getRay(rightPoints.get(i));
+
+            if (useOptimised) {
+                leftRay = left.getRay(leftPoints.get(i), left.getOptimiseRow().getF(), left.getOptimisedRotationTranslation(), left.getOptimiseRow().getK1());
+                rightRay = right.getRay(rightPoints.get(i), right.getOptimiseRow().getF(), right.getOptimisedRotationTranslation(), right.getOptimiseRow().getK1());
+            }
+
             Vector3D triangulatedPoint = leftRay.intersection(rightRay);
             double distance = leftRay.distance(rightRay);
 
@@ -58,5 +66,26 @@ public class TsaiCalibUtils {
         }
 
         return estimatedPoints;
+    }
+
+    public static void getTriangulatedEstimated3DError(TsaiCalib left, TsaiCalib right, boolean useOptimised) {
+        List<WorldPoint> leftPoints = left.getCalibrationPoints();
+        List<Vector3D> triangulatedPoints = getTriangulatedEstimated3DPoints(left,right, useOptimised);
+
+        double[] errorArray = new double[left.getCalibrationPoints().size()];
+
+        for (int i = 0; i < leftPoints.size(); i++) {
+            errorArray[i] = ErrorAnalysisSolver.calculateVectorErrorMagnitude(ErrorAnalysisSolver.vector3DToRealVector(triangulatedPoints.get(i)), leftPoints.get(i).getWorldPointVector());
+        }
+
+        double meanError = Arrays.stream(errorArray).average().orElse(-1);
+        StandardDeviation standardDeviation = new StandardDeviation();
+        double stdDev = standardDeviation.evaluate(errorArray);
+
+        System.out.println("--------");
+        System.out.println("Triangulated Errors backproject");
+        System.out.println("Mean Error mm:" + meanError);
+        System.out.println("Stdev: " + stdDev);
+
     }
 }
