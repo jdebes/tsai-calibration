@@ -12,10 +12,8 @@ import org.apache.commons.math3.linear.QRDecomposition;
 import org.apache.commons.math3.linear.RealMatrix;
 import org.apache.commons.math3.linear.RealVector;
 import org.apache.commons.math3.stat.descriptive.moment.StandardDeviation;
-import tsai.model.ErrorStats;
-import tsai.model.Point3D;
-import tsai.model.RotationTranslation;
-import tsai.model.WorldPoint;
+import tsai.model.*;
+import tsai.util.CsvUtil;
 import tsai.util.ErrorAnalysisSolver;
 import tsai.util.ParametricEquationSolver;
 
@@ -27,6 +25,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.stream.Collectors;
 
 
 /**
@@ -53,6 +52,7 @@ public class TsaiCalib {
     private double estimatedDistance;
     private double[][] transMatrix2DInv;
     private double sX;
+    private List<OptimiseRow> optimiseRows;
 
     // 3D to 2D Error
 
@@ -173,9 +173,14 @@ public class TsaiCalib {
         printStats(errors3to2, errors2to3);
 
         this.optimisedRotationTranslation = new RotationTranslation(rotationTranslation);
-        this.optimiseRow = optimiseFTzK(this.optimisedRotationTranslation, focalLength, rotationTranslation.getTransZ(), 0.01, 30);
+        this.optimiseRow = optimiseFTzK(this.optimisedRotationTranslation, focalLength, rotationTranslation.getTransZ(), 0.01, 29);
         this.optimiseRow.printStats();
         printPadding();
+
+        List<String> errorListString = optimiseRow.getErrorList().stream().map(x -> String.valueOf(x)).collect(Collectors.toList());
+        List<List<String>> csvList = new ArrayList<>();
+        csvList.add(errorListString);
+        CsvUtil.listToCsv(csvList, "opt2derror", inputFilePath);
 
         ErrorStats errors2to3optimised = new ErrorStats();
 
@@ -192,17 +197,26 @@ public class TsaiCalib {
 
         writeCalibrationPointsToCSV();
 
+        List<List<String>> rows = this.optimiseRows.stream().map(x -> x.toCsvList()).collect(Collectors.toList());
+        CsvUtil.listToCsv(rows, "optimisation", inputFilePath);
+
+        System.out.println();
+
         return;
 
     }
 
-    private OptimiseRow optimiseFTzK(RotationTranslation rotationTranslation, double initialF, double initialTz, double initialK, int numIterations) {
-        double percentIncrease = 0.001;
+    private OptimiseRow optimiseFTzK(RotationTranslation rotationTranslation, double initialF, double initialTz, double initialK, long numIterations) {
+        final double percentIncrease = 0.001;
         List<OptimiseRow> optimiseRows = new ArrayList<>();
 
-        for (int f = -numIterations; f < numIterations; f++ ) {
-            for (int t = -numIterations; t < numIterations; t++ ) {
-               for (int k = -numIterations; k < numIterations; k++ ) {
+        int i = 0;
+
+        for (long f = -numIterations; f < numIterations; f++ ) {
+            for (long t = -numIterations; t < numIterations; t++ ) {
+               for (long k = -numIterations; k < numIterations; k++ ) {
+                    i++;
+
                     List<Double> errorList = new ArrayList<>();
                     RealMatrix realTransMatrix2DInv = MatrixUtils.createRealMatrix(transMatrix2DInv);
                     RealMatrix realTransMatrix2D = MatrixUtils.inverse(realTransMatrix2DInv);
@@ -246,13 +260,15 @@ public class TsaiCalib {
                     StandardDeviation sd = new StandardDeviation();
                     double stdDev = sd.evaluate(errorList.stream().mapToDouble(x -> x).toArray());
 
-                    OptimiseRow optimiseRow = new OptimiseRow(adjustedK1, AdjustedF, adjustedTz, errorList.stream().mapToDouble(x -> x).average().getAsDouble(), stdDev);
+                    OptimiseRow optimiseRow = new OptimiseRow(adjustedK1, AdjustedF, adjustedTz, errorList.stream().mapToDouble(x -> x).average().getAsDouble(), stdDev, errorList);
                     optimiseRows.add(optimiseRow);
                 }
             }
         }
 
         final Comparator<OptimiseRow> comp = (or1, or2) -> Double.compare(or1.getError(), or2.getError());
+        this.optimiseRows = optimiseRows;
+
         return optimiseRows.stream().min(comp).orElse(null);
     }
 
@@ -563,51 +579,6 @@ public class TsaiCalib {
 
     public Line getRay(WorldPoint worldPoint) {
         return getRay(worldPoint, this.focalLength, this.rotationTranslation, 0.0);
-    }
-
-    public static class OptimiseRow {
-        private final double k1;
-        private final double f;
-        private final double tZ;
-        private final double error;
-        private final double stdDev;
-
-        public OptimiseRow(double k1, double f, double tZ, double error, double stdDev) {
-            this.k1 = k1;
-            this.f = f;
-            this.tZ = tZ;
-            this.error = error;
-            this.stdDev = stdDev;
-        }
-
-        public double getK1() {
-            return k1;
-        }
-
-        public double getF() {
-            return f;
-        }
-
-        public double gettZ() {
-            return tZ;
-        }
-
-        public double getError() {
-            return error;
-        }
-
-        public double getStdDev() {
-            return stdDev;
-        }
-
-        public void printStats() {
-            System.out.println("Optimisation Complete: ");
-            System.out.println("K1: " + k1);
-            System.out.println("focal" + f);
-            System.out.println("Tz: " + tZ);
-            System.out.println("Avg Error (Px): " + error);
-            System.out.println("Error StdDev: " + stdDev);
-        }
     }
 
     public RotationTranslation getOptimisedRotationTranslation() {

@@ -66,6 +66,8 @@ public class Application {
             System.out.println("######### Stereo Results #########");
             double baseline = TsaiCalibUtils.calculateStereoBaseline(tsaiCalib, tsaiCalibRight);
             System.out.println("Baseline: " + baseline);
+            double optimisedBaseline = TsaiCalibUtils.calculateOptimisedStereoBaseline(tsaiCalib, tsaiCalibRight);
+            System.out.println("OBaseline: " + optimisedBaseline);
 
 
             //List<Vector3D> triangulatedPoints = TsaiCalibUtils.getTriangulatedEstimated3DPoints(tsaiCalib, tsaiCalibRight);

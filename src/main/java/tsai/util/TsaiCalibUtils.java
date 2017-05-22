@@ -34,6 +34,10 @@ public class TsaiCalibUtils {
         return left.getCameraOriginWorldFrame().getDistance(right.getCameraOriginWorldFrame());
     }
 
+    public static double calculateOptimisedStereoBaseline(TsaiCalib left, TsaiCalib right) {
+        return left.getCameraOriginWorldFrame(left.getOptimisedRotationTranslation(), left.getOptimiseRow().getF()).getDistance(right.getCameraOriginWorldFrame(right.getOptimisedRotationTranslation(), right.getOptimiseRow().getF()));
+    }
+
     public static List<Vector3D> getTriangulatedEstimated3DPoints(TsaiCalib left, TsaiCalib right, boolean useOptimised) {
         List<WorldPoint> leftPoints = left.getCalibrationPoints();
         List<WorldPoint> rightPoints = right.getCalibrationPoints();
