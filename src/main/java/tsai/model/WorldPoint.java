@@ -97,6 +97,11 @@ public class WorldPoint {
         return csvList;
     }
 
+    public RealVector getRealRawImagePointVector() {
+        double[] v = {rawImagePoint.x,rawImagePoint.y,1};
+        return MatrixUtils.createRealVector(v);
+    }
+
     public int getId() {
         return id;
     }
@@ -131,6 +136,10 @@ public class WorldPoint {
 
     public Point getRawImagePoint() {
         return rawImagePoint;
+    }
+
+    public Point.Double getRawImagePointD() {
+        return new Point2D.Double(rawImagePoint.getX(), rawImagePoint.getY());
     }
 
     public void setRawImagePoint(Point rawImagePoint) {

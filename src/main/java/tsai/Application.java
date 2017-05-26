@@ -18,13 +18,11 @@ public class Application {
     private final String inputFilePath;
     private final String inputParamsPath;
     private final boolean isStereo;
-    private final String inputFilePathClose;
 
-    private Application(String inputFilePath, String inputParamsPath, boolean isStereo, String inputFilePathClose) {
+    private Application(String inputFilePath, String inputParamsPath, boolean isStereo) {
         this.inputFilePath = inputFilePath;
         this.inputParamsPath = inputParamsPath;
         this.isStereo = isStereo;
-        this.inputFilePathClose = inputFilePathClose;
     }
 
     private static Application getInstance() {
@@ -35,7 +33,7 @@ public class Application {
 
         try {
             Configuration config = builder.getConfiguration();
-            return new Application(config.getString("input.file"), config.getString("input.params"), config.getBoolean("input.stereo"), config.getString("input.file.initial"));
+            return new Application(config.getString("input.file"), config.getString("input.params"), config.getBoolean("input.stereo"));
         } catch(ConfigurationException cex) {
             System.err.println("Unable to read " + PROPERTIES_FILE_NAME);
         }
@@ -73,6 +71,8 @@ public class Application {
             //List<Vector3D> triangulatedPoints = TsaiCalibUtils.getTriangulatedEstimated3DPoints(tsaiCalib, tsaiCalibRight);
             TsaiCalibUtils.getTriangulatedEstimated3DError(tsaiCalib, tsaiCalibRight, false);
             TsaiCalibUtils.getTriangulatedEstimated3DError(tsaiCalib, tsaiCalibRight, true);
+
+            TsaiCalibUtils.computeFundamentalMatrix(tsaiCalib, tsaiCalibRight, true);
 
 
         }
