@@ -142,6 +142,10 @@ public class WorldPoint {
         return new Point2D.Double(rawImagePoint.getX(), rawImagePoint.getY());
     }
 
+    public double[] getRawImagePointArray() {
+        return new double[] {rawImagePoint.getX(), rawImagePoint.getY(), 1};
+    }
+
     public void setRawImagePoint(Point rawImagePoint) {
         this.rawImagePoint = rawImagePoint;
     }

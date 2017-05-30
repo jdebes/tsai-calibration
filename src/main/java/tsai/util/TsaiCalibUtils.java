@@ -136,30 +136,41 @@ public class TsaiCalibUtils {
 
         //Initial Result | A = USV^T
         SingularValueDecomposition initialSingularValueDecomposition = new SingularValueDecomposition(aMatrix);
-
-        double minValue = Arrays.stream(initialSingularValueDecomposition.getSingularValues()).min().orElse(0);
-
         RealMatrix sMatrix = initialSingularValueDecomposition.getS();
-        // Set min diag to zero
-        sMatrix.setColumn(ArrayUtils.indexOf(initialSingularValueDecomposition.getSingularValues(), minValue), new double[] {0,0,0,0,0,0,0,0,0});
 
-        RealMatrix finalMatrix = initialSingularValueDecomposition.getU().multiply(initialSingularValueDecomposition.getS()).multiply(initialSingularValueDecomposition.getVT());
-        SingularValueDecomposition finalSingularValueDecomposition = new SingularValueDecomposition(finalMatrix);
+        if (normalise) {
+            double minValue = Arrays.stream(initialSingularValueDecomposition.getSingularValues()).min().orElse(0);
 
-        double[][] normalisedFundamentalMatrix = new double[3][3];
+            // Set min diag to zero
+            sMatrix.setColumn(ArrayUtils.indexOf(initialSingularValueDecomposition.getSingularValues(), minValue), new double[]{0, 0, 0, 0, 0, 0, 0, 0, 0});
+
+            RealMatrix finalMatrix = initialSingularValueDecomposition.getU().multiply(initialSingularValueDecomposition.getS()).multiply(initialSingularValueDecomposition.getVT());
+            SingularValueDecomposition finalSingularValueDecomposition = new SingularValueDecomposition(finalMatrix);
+
+            double[][] normalisedFundamentalMatrix = singularValuesToMatrix(finalSingularValueDecomposition.getSingularValues());
+            RealMatrix unNormalisedFinalMatrix = MatrixUtils.inverse(rightResult.getTransformMatrix()).multiply(MatrixUtils.createRealMatrix(normalisedFundamentalMatrix)).multiply(MatrixUtils.inverse(leftResult.getTransformMatrix()));
+
+            return unNormalisedFinalMatrix;
+        } else {
+            double[][] fundamentalMatrix =  singularValuesToMatrix(initialSingularValueDecomposition.getSingularValues());
+            findRightEpipolarLine(MatrixUtils.createRealMatrix(fundamentalMatrix), leftPoints.get(0).getRawImagePointArray(), rightPoints.get(0).getRawImagePointArray());
+
+            return MatrixUtils.createRealMatrix(fundamentalMatrix);
+        }
+    }
+
+    public static double[][] singularValuesToMatrix(double[] singularValues) {
+        double[][] fundamentalMatrix = new double[3][3];
 
         int num = 0;
-        for (int i = 0; i < normalisedFundamentalMatrix.length; i++) {
-            for (int j = 0; j < normalisedFundamentalMatrix.length; j++) {
-                normalisedFundamentalMatrix[i][j] = finalSingularValueDecomposition.getSingularValues()[num];
+        for (int i = 0; i < fundamentalMatrix.length; i++) {
+            for (int j = 0; j < fundamentalMatrix.length; j++) {
+                fundamentalMatrix[i][j] = singularValues[num];
                 num++;
             }
         }
 
-        RealMatrix unNormalisedFinalMatrix = MatrixUtils.inverse(rightResult.getTransformMatrix()).multiply(MatrixUtils.createRealMatrix(normalisedFundamentalMatrix)).multiply(MatrixUtils.inverse(leftResult.getTransformMatrix()));
-
-        findEpipoles(unNormalisedFinalMatrix);
-        return unNormalisedFinalMatrix;
+        return fundamentalMatrix;
     }
 
     public static void findEpipoles(RealMatrix fundamentalMatrix) {
@@ -174,6 +185,14 @@ public class TsaiCalibUtils {
 
         double[] leftEpipole = singularValueDecomposition.getV().getColumn(zeroIndex);
         double[] rightEpipole = singularValueDecomposition.getU().getColumn(zeroIndex);
+    }
+
+    public static void findRightEpipolarLine(RealMatrix fundamentalMatrix, double[] leftPoint, double[] rightPoint) {
+        RealMatrix realMatrix = MatrixUtils.createRealMatrix(3,1);
+        realMatrix.setColumn(0, rightPoint);
+        realMatrix = realMatrix.transpose();
+
+        double[] result = fundamentalMatrix.operate(leftPoint);
     }
 
     public static NormalisationResult normalisePoints(List<WorldPoint> points) {
