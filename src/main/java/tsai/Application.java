@@ -14,12 +14,14 @@ import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
+import java.util.List;
 
 /**
  * Created by jonas on 5/05/17.
  */
 public class Application {
     private static final String PROPERTIES_FILE_NAME= "application.properties";
+    private static final int WINDOW_SIZE= 10;
 
     private final String inputFilePath;
     private final String inputParamsPath;
@@ -56,9 +58,11 @@ public class Application {
     public static void main(String[] args) {
         Application app = Application.getInstance();
         if (app != null) {
-            app.start(args);
+            //app.start(args);
+            app.startStereo();
         }
     }
+
 
     public BufferedImage readImage(String path) {
         BufferedImage bufferedImage = null;
@@ -72,9 +76,17 @@ public class Application {
         return bufferedImage;
     }
 
+    public void writeImage(String path, BufferedImage bufferedImage) {
+        try {
+            File depthMapFile = new File(path);
+            ImageIO.write(bufferedImage, "jpg", depthMapFile);
+        } catch (IOException e) {
+            System.out.println("Unable to write depthmap to file");
+        }
+    }
+
     private void start(String[] args) {
         TsaiCalib tsaiCalib = new TsaiCalib(inputFilePath, inputParamsPath);
-        leftBufferedImage = readImage(inputFilePath);
         tsaiCalib.start();
 
         if (isStereo) {
@@ -97,9 +109,19 @@ public class Application {
             TsaiCalibUtils.getTriangulatedEstimated3DError(tsaiCalib, tsaiCalibRight, false);
             TsaiCalibUtils.getTriangulatedEstimated3DError(tsaiCalib, tsaiCalibRight, true);
 
-            leftBufferedImage = readImage(leftImagePath);
-            rightBufferedImage = readImage(rightImagePath);
-            SSDUtils.ssdMatch(tsaiCalib, leftBufferedImage, tsaiCalibRight, rightBufferedImage, 5);
+
         }
+    }
+
+    private void startStereo() {
+        System.out.println("######### Building Disparity Map #########");
+        String pathWithoutExt = FilenameUtils.removeExtension(leftImagePath);
+        leftBufferedImage = readImage(leftImagePath);
+        rightBufferedImage = readImage(rightImagePath);
+
+        List matchedPairs = SSDUtils.ssdMatch(leftBufferedImage, rightBufferedImage, WINDOW_SIZE);
+        BufferedImage depthMapImage = SSDUtils.buildDisparityImage(matchedPairs, leftBufferedImage, WINDOW_SIZE);
+
+        writeImage(pathWithoutExt + "_dmap.jpg", depthMapImage);
     }
 }
