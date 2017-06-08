@@ -17,8 +17,8 @@ public class SSDUtils {
     public static List ssdMatch(BufferedImage leftImage, BufferedImage rightImage, int windowSize) {
         List<MatchedPair> matchedPoints = new ArrayList<>();
 
-        for (int r = 0; r < leftImage.getHeight() + windowSize; r += windowSize) {
-            for (int c = 0; c < leftImage.getWidth() + windowSize; c += windowSize) {
+        for (int r = 0; r < leftImage.getHeight(); r++ ) {
+            for (int c = 0; c < leftImage.getWidth(); c++) {
                 List<Long> squaredDifferences = new ArrayList<>();
 
                 Point minLocation = new Point(c, 0);
@@ -26,7 +26,7 @@ public class SSDUtils {
                 long minValue = sumSearchWindows(leftImage, leftPoint, rightImage, minLocation, windowSize);
                 squaredDifferences.add(minValue);
 
-                for (int hCol = 0; hCol < leftImage.getWidth(); hCol+= windowSize) {
+                for (int hCol = c; hCol >= (c - windowSize * 3); hCol--) {
                     Point rightPoint = new Point(hCol, r);
                     long summedWindow = sumSearchWindows(leftImage, leftPoint, rightImage, rightPoint, windowSize);
                     squaredDifferences.add(summedWindow);
@@ -36,40 +36,22 @@ public class SSDUtils {
                         minLocation = rightPoint;
                     }
                 }
-                matchedPoints.add(new MatchedPair(leftPoint, minLocation, leftPoint.x - minLocation.x));
+                matchedPoints.add(new MatchedPair(leftPoint, minLocation, Math.abs(leftPoint.x - minLocation.x)));
             }
         }
 
-        normalisePairDisparities(matchedPoints);
 
         return matchedPoints;
     }
 
-    public static void normalisePairDisparities(List<MatchedPair> matchedPairs) {
-        double min = matchedPairs.stream().map(mp -> mp.getxDisparity()).min(Integer::compare).orElse(-1);
-        double max = matchedPairs.stream().map(mp -> mp.getxDisparity()).max(Integer::compare).orElse(-1);
-
-        for (MatchedPair matchedPair : matchedPairs) {
-            //double normalised = (matchedPair.getxDisparity() - min) / (max - min);
-            //matchedPair.setNormalisedXDisparity(normalised);
-
-            String normIntensity = "0." + String.valueOf(Math.abs(matchedPair.getxDisparity()));
-            double intensity = Double.valueOf(normIntensity);
-
-            matchedPair.setNormalisedXDisparity(intensity);
-
-        }
-
-
-    }
 
     public static BufferedImage buildDisparityImage(List<MatchedPair> matchedPairs, BufferedImage leftImage, int windowSize) {
         BufferedImage outputGreyScale = new BufferedImage(leftImage.getWidth(), leftImage.getHeight(), BufferedImage.TYPE_BYTE_GRAY);
 
         int i = 0;
-        for (int r = 0; r < leftImage.getHeight() + windowSize; r += windowSize) {
-            for (int c = 0; c < leftImage.getWidth() + windowSize; c += windowSize) {
-                int intensity = (int)(matchedPairs.get(i).getNormalisedXDisparity() * MAX_INTENSITY);
+        for (int r = 0; r < leftImage.getHeight(); r++) {
+            for (int c = 0; c < leftImage.getWidth(); c++) {
+                int intensity = matchedPairs.get(i).getxDisparity() * (MAX_INTENSITY / (windowSize * 3));
                 markWindowPoints(new Point(c,r), windowSize, outputGreyScale, intensity);
                 i++;
             }

@@ -21,7 +21,7 @@ import java.util.List;
  */
 public class Application {
     private static final String PROPERTIES_FILE_NAME= "application.properties";
-    private static final int WINDOW_SIZE= 10;
+    private static final int WINDOW_SIZE= 6;
 
     private final String inputFilePath;
     private final String inputParamsPath;
