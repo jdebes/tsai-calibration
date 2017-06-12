@@ -14,10 +14,9 @@ import java.util.List;
 public class SSDUtils {
     private static final int MAX_INTENSITY = 255;
 
-    public static List ssdMatch(BufferedImage leftImage, BufferedImage rightImage, int windowSize) {
-        List<MatchedPair> matchedPoints = new ArrayList<>();
+    public static List ssdMatch(BufferedImage leftImage, BufferedImage rightImage, int windowSize, int heightCut, int heightStart, List<MatchedPair> matchedPoints) {
 
-        for (int r = 0; r < leftImage.getHeight(); r++ ) {
+        for (int r = heightStart; r < heightCut; r++ ) {
             for (int c = 0; c < leftImage.getWidth(); c++) {
                 List<Long> squaredDifferences = new ArrayList<>();
 
@@ -26,7 +25,7 @@ public class SSDUtils {
                 long minValue = sumSearchWindows(leftImage, leftPoint, rightImage, minLocation, windowSize);
                 squaredDifferences.add(minValue);
 
-                for (int hCol = c; hCol >= (c - windowSize * 3); hCol--) {
+                for (int hCol = c; hCol >= (c - 15); hCol--) {
                     Point rightPoint = new Point(hCol, r);
                     long summedWindow = sumSearchWindows(leftImage, leftPoint, rightImage, rightPoint, windowSize);
                     squaredDifferences.add(summedWindow);
@@ -43,7 +42,6 @@ public class SSDUtils {
 
         return matchedPoints;
     }
-
 
     public static BufferedImage buildDisparityImage(List<MatchedPair> matchedPairs, BufferedImage leftImage, int windowSize) {
         BufferedImage outputGreyScale = new BufferedImage(leftImage.getWidth(), leftImage.getHeight(), BufferedImage.TYPE_BYTE_GRAY);

@@ -7,6 +7,9 @@ import org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder;
 import org.apache.commons.configuration2.builder.fluent.Parameters;
 import org.apache.commons.configuration2.ex.ConfigurationException;
 import org.apache.commons.io.FilenameUtils;
+import org.apache.commons.math3.linear.RealMatrix;
+import tsai.model.MatchedPair;
+import tsai.util.Rectification;
 import tsai.util.SSDUtils;
 import tsai.util.TsaiCalibUtils;
 
@@ -14,6 +17,7 @@ import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -59,8 +63,10 @@ public class Application {
         Application app = Application.getInstance();
         if (app != null) {
             //app.start(args);
-            app.startStereo();
+            //app.startStereo();
+            app.startMultiStereo(4);
         }
+
     }
 
 
@@ -109,6 +115,10 @@ public class Application {
             TsaiCalibUtils.getTriangulatedEstimated3DError(tsaiCalib, tsaiCalibRight, false);
             TsaiCalibUtils.getTriangulatedEstimated3DError(tsaiCalib, tsaiCalibRight, true);
 
+            RealMatrix fundamentalMatrix = TsaiCalibUtils.computeFundamentalMatrix(tsaiCalib, tsaiCalibRight, true);
+            double[] leftEpipole = TsaiCalibUtils.findEpipoles(fundamentalMatrix, true);
+
+            Rectification.buildRRect(leftEpipole);
 
         }
     }
@@ -119,8 +129,59 @@ public class Application {
         leftBufferedImage = readImage(leftImagePath);
         rightBufferedImage = readImage(rightImagePath);
 
-        List matchedPairs = SSDUtils.ssdMatch(leftBufferedImage, rightBufferedImage, WINDOW_SIZE);
+        List<MatchedPair> matchedPairs = new ArrayList<>();
+        SSDUtils.ssdMatch(leftBufferedImage, rightBufferedImage, WINDOW_SIZE, leftBufferedImage.getHeight(), 0, matchedPairs);
+
         BufferedImage depthMapImage = SSDUtils.buildDisparityImage(matchedPairs, leftBufferedImage, WINDOW_SIZE);
+
+        writeImage(pathWithoutExt + "_dmap.jpg", depthMapImage);
+    }
+
+    private void startMultiStereo(float threads) {
+        System.out.println("######### Building Disparity Map Threaded #########");
+        leftBufferedImage = readImage(leftImagePath);
+        rightBufferedImage = readImage(rightImagePath);
+        String pathWithoutExt = FilenameUtils.removeExtension(leftImagePath);
+
+        List<MatchedPair> matchedPairs1 = new ArrayList<>();
+
+        StereoRunnable stereoRunnable1 = new StereoRunnable(matchedPairs1, leftBufferedImage, rightBufferedImage, WINDOW_SIZE, 0, (int)(leftBufferedImage.getHeight() / threads));
+
+        Thread t1 = new Thread(stereoRunnable1);
+        t1.start();
+
+        List<List<MatchedPair>> allMatchedPairs = new ArrayList<>();
+        List<Thread> threadList = new ArrayList<>();
+        for (int i = 1; i <= threads; i++) {
+            List<MatchedPair> matchedPairs = new ArrayList<>();
+
+            float start =  leftBufferedImage.getHeight() * (i / threads);
+            float end = leftBufferedImage.getHeight() * ((i+1) / threads);
+
+            StereoRunnable stereoRunnable = new StereoRunnable(matchedPairs, leftBufferedImage, rightBufferedImage, WINDOW_SIZE, Math.round(start), Math.round(end));
+            Thread t = new Thread(stereoRunnable);
+            t.start();
+
+            threadList.add(t);
+            allMatchedPairs.add(matchedPairs);
+        }
+
+        try {
+            t1.join();
+
+            for (Thread thread : threadList) {
+                thread.join();
+            }
+
+        } catch (InterruptedException e) {
+            System.out.println("Thread Interrupted");
+        }
+
+        for (List<MatchedPair> mp : allMatchedPairs) {
+            matchedPairs1.addAll(mp);
+        }
+
+        BufferedImage depthMapImage = SSDUtils.buildDisparityImage(matchedPairs1, leftBufferedImage, WINDOW_SIZE);
 
         writeImage(pathWithoutExt + "_dmap.jpg", depthMapImage);
     }

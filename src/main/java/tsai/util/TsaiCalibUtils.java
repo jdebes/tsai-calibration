@@ -93,7 +93,7 @@ public class TsaiCalibUtils {
         double stdDev = standardDeviation.evaluate(errorArray);
 
         System.out.println("--------");
-        System.out.println("Triangulated Errors backproject");
+        System.out.println("Triangulated Errors backproject. Optimised: " + useOptimised);
         System.out.println("Mean Error mm:" + meanError);
         System.out.println("Stdev: " + stdDev);
 
@@ -173,7 +173,7 @@ public class TsaiCalibUtils {
         return fundamentalMatrix;
     }
 
-    public static void findEpipoles(RealMatrix fundamentalMatrix) {
+    public static double[] findEpipoles(RealMatrix fundamentalMatrix, boolean getLeftEpipole) {
         SingularValueDecomposition singularValueDecomposition = new SingularValueDecomposition(fundamentalMatrix);
 
         int zeroIndex = -1;
@@ -183,8 +183,13 @@ public class TsaiCalibUtils {
             }
         }
 
-        double[] leftEpipole = singularValueDecomposition.getV().getColumn(zeroIndex);
-        double[] rightEpipole = singularValueDecomposition.getU().getColumn(zeroIndex);
+        if (getLeftEpipole) {
+            double[] leftEpipole = singularValueDecomposition.getV().getColumn(zeroIndex);
+            return leftEpipole;
+        } else  {
+            double[] rightEpipole = singularValueDecomposition.getU().getColumn(zeroIndex);
+            return rightEpipole;
+        }
     }
 
     public static void findRightEpipolarLine(RealMatrix fundamentalMatrix, double[] leftPoint, double[] rightPoint) {
