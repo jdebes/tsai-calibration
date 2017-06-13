@@ -25,7 +25,7 @@ public class SSDUtils {
                 long minValue = sumSearchWindows(leftImage, leftPoint, rightImage, minLocation, windowSize);
                 squaredDifferences.add(minValue);
 
-                for (int hCol = c; hCol >= (c - 15); hCol--) {
+                for (int hCol = c; hCol >= (c - 30); hCol--) {
                     Point rightPoint = new Point(hCol, r);
                     long summedWindow = sumSearchWindows(leftImage, leftPoint, rightImage, rightPoint, windowSize);
                     squaredDifferences.add(summedWindow);
