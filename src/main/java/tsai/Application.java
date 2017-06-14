@@ -16,6 +16,7 @@ import org.apache.commons.math3.linear.RealVector;
 import org.apache.commons.math3.stat.descriptive.moment.StandardDeviation;
 import tsai.model.MatchedPair;
 import tsai.model.StereoPoint;
+import tsai.util.CsvUtil;
 import tsai.util.Rectification;
 import tsai.util.SSDUtils;
 import tsai.util.TsaiCalibUtils;
@@ -75,9 +76,9 @@ public class Application {
         if (app != null) {
             long startTime = System.currentTimeMillis();
 
-            //app.start(args);
+            app.start(args);
             //app.startStereo();
-            app.startMultiStereo(6);
+            //app.startMultiStereo(6);
 
             long endTime = System.currentTimeMillis();
             long totalTime = endTime - startTime;
@@ -85,7 +86,6 @@ public class Application {
         }
 
     }
-
 
     public BufferedImage readImage(String path) {
         BufferedImage bufferedImage = null;
@@ -245,12 +245,13 @@ public class Application {
 
             RealVector error = rightPointKnown.subtract(rightPointEstimated);
             stereoPoint.setRightError(error.getNorm());
+            stereoPoint.setMatchedPair(matchedPair);
         }
 
         return stereoPoints;
     }
 
-    private static void printStereoMatchErrors(List<StereoPoint> stereoPoints) {
+    private void printStereoMatchErrors(List<StereoPoint> stereoPoints) {
         double mean = stereoPoints.stream().mapToDouble(StereoPoint::getRightError).average().orElse(-1);
         double[] errorArray = stereoPoints.stream().mapToDouble(StereoPoint::getRightError).toArray();
 
@@ -260,5 +261,10 @@ public class Application {
         System.out.println("##### Match Errors #######");
         System.out.println("Mean: " + mean);
         System.out.println("stdDev: " + standardDev);
+
+
+        // Make CSV file for stereo matching results
+        List<List<String>> csvRows = StereoPoint.getStereoPointsAsCsv(stereoPoints);
+        CsvUtil.listToCsv(csvRows, "stereomatching", inputFilePath);
     }
 }
